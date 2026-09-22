@@ -17,5 +17,8 @@ export async function GET(request:Request){
    freight=listingFreight(raw,prices.currency);
   }
   return json({itemId:id,title:typeof item.title==='string'?item.title:id,listingType:item.listing_type_id,...prices,freight,freeShipping:typeof shipping.free_shipping==='boolean'?shipping.free_shipping:null,queriedAt:new Date().toISOString()});
- }catch(e){return json({error:e instanceof MlError?e.message:'Não foi possível consultar este anúncio.'},e instanceof MlError?e.status:503)}
+ }catch(e){
+  if(e instanceof MlError&&/HTTP 404/.test(e.message))return json({error:'Código não encontrado como anúncio. Confira o MLB individual: o código de uma família de produtos não é um MLB.',code:'ITEM_NOT_FOUND'},404);
+  return json({error:e instanceof MlError?e.message:'Não foi possível consultar este anúncio.'},e instanceof MlError?e.status:503);
+ }
 }
