@@ -30,7 +30,7 @@ Adesões a promoções estão bloqueadas no servidor após divergências de pre�
 
 ## GitHub e publicação
 Repositório compartilhado: https://github.com/DherikCamargo/Gestor-Promocoes. Base importada: código da versão32 publicada. Consulte CONTRIBUTING.md para trabalhar em branches e pull requests.
-A publicação atual permanece em https://gestor-promocoes-dherik.dherikjcamargo.chatgpt.site . Um push ou merge no novo GitHub não atualiza esse site automaticamente. O fluxo de sincronização/publicação precisa ser configurado ou executado de forma explícita após revisão.
+A publicação atual permanece em https://gestor-promocoes-dherik.dherikjcamargo.chatgpt.site . A automação Publicar Gestor de Promoções foi ativada em 22/09/2026: incorporar um pull request à main aciona sincronização, build e publicação no Site. Commits diretos na main não acionam o gatilho. O build precisa passar e a publicação pode falhar; confira o resultado informado pela automação. Veja AUTOMACAO-PUBLICACAO.md.
 Não usar GitHub Pages para este aplicativo: ele requer backend, autenticação e banco.
 
 O pacote contém o código rastreado da versão32 e documentos de colaboração. Não contém histórico Git, dependências instaladas, tokens, banco de produção ou sessões de usuários.
