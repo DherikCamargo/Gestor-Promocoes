@@ -1,0 +1,2 @@
+import {actor,account,json} from "@/lib/mercado-livre";
+export async function GET(){let owner:string;try{owner=await actor()}catch{return json({error:"Entre com sua conta do ChatGPT para configurar a conexão."},401)}try{const row=await account(owner);return json({configured:!!row,connected:!!row?.tokens,nickname:row?.nickname??null,sellerId:row?.seller_id??null,expiresAt:row?.expires_at??null})}catch{return json({error:"Conexão temporariamente indisponível. Recarregue a página."},503)}}
