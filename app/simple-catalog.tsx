@@ -3,10 +3,10 @@ import {useEffect,useRef,useState} from 'react';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import type {CatalogRow} from '@/lib/ml-catalog';
+import {listingSearch} from '@/lib/listing-search';
 type Snapshot={run:string;rows:CatalogRow[];done:boolean};
 type Summary={itemId:string;title:string;listingType:string;currency:string;regularPrice:number|null;promotionPrice:number|null;currentPrice:number|null;variationPrices:boolean;freight:number|null;freeShipping:boolean|null};
 type Entry={itemId:string;title:string;data?:Summary;error?:string};
-const normalize=(s:string)=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const money=(n:number,currency:string)=>new Intl.NumberFormat('pt-BR',{style:'currency',currency}).format(n);
 const batchSize=6;
 export default function SimpleCatalog(){
@@ -25,8 +25,8 @@ export default function SimpleCatalog(){
  }
  async function search(e:React.FormEvent){
   e.preventDefault();if(lock.current||query.trim().length<2)return;lock.current=true;setBusy(true);setMessage('');setSearched(true);setEntries([]);
-  const term=query.trim(),id=term.toUpperCase().replace(/^MLB-?/,'');
-  const found=/^\d+$/.test(id)?[{itemId:'MLB'+id,title:'MLB'+id}]:Array.from(new Map((snapshot?.rows??[]).filter(r=>normalize(r.title+' '+r.itemId+' '+r.sku+' '+r.variation).includes(normalize(term))).map(r=>[r.itemId,{itemId:r.itemId,title:r.title}])).values());
+  const {entries:found,message:guidance}=listingSearch(query,snapshot?.rows??[]);
+  setMessage(guidance);
   setMatches(found);
   try{await load(found.slice(0,batchSize),[]);}finally{if(alive.current)setBusy(false);lock.current=false;}
  }
@@ -46,7 +46,7 @@ export default function SimpleCatalog(){
  {entry.data?<><div><span className="simple-label">Preço normal</span><strong>{entry.data.regularPrice===null?entry.data.variationPrices?'Varia por opção':'Não informado':money(entry.data.regularPrice,entry.data.currency)}</strong><span className="simple-label">Em promoção</span><strong className="sale-value">{entry.data.promotionPrice!==null?money(entry.data.promotionPrice,entry.data.currency):entry.data.currentPrice!==null?'Sem promoção informada':'Não informado'}</strong></div>
  <div><span className="simple-label">Tipo do anúncio</span><strong>{entry.data.listingType==='gold_special'?'Clássico':entry.data.listingType==='gold_pro'?'Premium':entry.data.listingType||'Não informado'}</strong></div>
  <div><span className="simple-label">Frete por sua conta</span><strong>{entry.data.freight===null?'Não informado':money(entry.data.freight,entry.data.currency)}</strong>{entry.data.freight!==null&&<p className="small">Estimativa do ML</p>}{entry.data.freeShipping===true&&<p className="small">Grátis para o comprador</p>}</div></>:<p className="simple-error" role="alert">{entry.error}</p>}</article>)}</div>
- {searched&&!busy&&matches.length===0&&<p>Nenhum anúncio encontrado. Tente o MLB completo ou atualize os anúncios.</p>}
+ {searched&&!busy&&!message&&matches.length===0&&<p>Nenhum anúncio encontrado. Tente o MLB completo ou atualize os anúncios.</p>}
  {matches.length>entries.length&&!busy&&<Button variant="outline" onClick={more}>Mostrar mais anúncios</Button>}
  </section>;
 }
