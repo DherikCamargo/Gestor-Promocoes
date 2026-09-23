@@ -2,7 +2,7 @@
 
 Repositório: https://github.com/DherikCamargo/Gestor-Promocoes (privado).
 Base: Site v32, commit de origem 7678cc95daf1b3b255ccb81de462d1dab2e92ad9.
-Importação inicial do código rastreado, sem histórico Git, credenciais ou banco de produção. README e documentos de colaboração são complementos da exportação; código funcional é o mesmo da versão32.
+Importação inicial do código rastreado, sem histórico Git, credenciais ou banco de produção. README e documentos de colaboração são complementos da exportação; código funcional é o mesmo da versão 32.
 Leia Continuidade-Gestor-Promocoes-v32.md para arquitetura, regras financeiras, incidentes e testes. Este arquivo atualiza a observação antiga de que o GitHub não estava configurado.
 
 ## Fluxo

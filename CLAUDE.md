@@ -2,7 +2,7 @@
 
 Leia README.md e Continuidade-Gestor-Promocoes-v32.md antes de trabalhar. Este é um sistema existente em produção, não um projeto novo.
 
-- Base exportada: versão32, commit7678cc95daf1b3b255ccb81de462d1dab2e92ad9.
+- Base exportada: versão 32, commit 7678cc95daf1b3b255ccb81de462d1dab2e92ad9.
 - Preserve arquitetura Vinext/React/TypeScript/Cloudflare Workers/D1 e pnpm-lock.yaml.
 - Não recrie o aplicativo ou migre o framework para facilitar uma edição pontual.
 - A rota app/api/mercado-livre/promocoes/participar/route.ts está intencionalmente bloqueada por incidente financeiro. Não reabra sem validação de proposta/preço, regras por campanha e confirmação pós-escrita. Nenhum teste real de adesão autorizado por este pacote.
