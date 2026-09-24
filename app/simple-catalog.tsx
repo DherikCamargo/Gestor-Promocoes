@@ -34,6 +34,16 @@ function groupRows(rows:CatalogRow[]):Group[]{
  return groups;
 }
 
+function Subsidy({offer:p,money:m}:{offer:ActiveOffer|null;money:(n:number)=>string}){
+ if(!p)return <Muted>—</Muted>;
+ if(p.status!=='identified')return <><Muted>Não confirmado</Muted><Note>{p.reason}</Note></>;
+ const pct=p.meliPercentage!==null?p.meliPercentage.toLocaleString('pt-BR')+'% do preço normal':null;
+ const boost=p.feeDiscount>0?m(p.feeDiscount)+' de desconto na tarifa':null;
+ if(p.mlSubsidy)return <>{m(p.mlSubsidy)}<Note>{pct}{boost&&<><br/>+ {boost}</>}</Note></>;
+ if(p.mlSubsidy===null)return <><Muted>{pct?'ML cobre '+pct:'Não informado'}</Muted><Note>Preço normal da oferta não informado</Note>{boost&&<Note>+ {boost}</Note>}</>;
+ return boost?<>{m(p.feeDiscount)}<Note>desconto na tarifa</Note></>:<Muted>Sem subsídio</Muted>;
+}
+
 function Values({result,retry}:{result?:Result;retry:()=>void}){
  if(result?.error)return <div className="gp-error" role="alert"><span>{result.error}</span><Button variant="outline" size="sm" onClick={retry}>Tentar de novo</Button></div>;
  const d=result?.data;
@@ -43,7 +53,7 @@ function Values({result,retry}:{result?:Result;retry:()=>void}){
   <Cell label="Preço normal">{d.regularPrice!==null?m(d.regularPrice):<Muted>{d.variationPrices?'Varia por opção':'Não informado'}</Muted>}</Cell>
   <Cell label="Na promoção">{d.promotionPrice!==null?<>{m(d.promotionPrice)}{p?.status==='identified'&&p.name&&<Note>{p.name}</Note>}</>:<Muted>{d.currentPrice!==null?'Sem promoção':'Não informado'}</Muted>}</Cell>
   <Cell label="Tarifa ML">{d.saleFee?<>{m(d.saleFee.amount)}{d.saleFee.percentage!==null&&<Note>{d.saleFee.percentage.toLocaleString('pt-BR')}%{d.saleFee.fixed?' + '+m(d.saleFee.fixed)+' fixo':''}</Note>}</>:<Muted>Não informado</Muted>}</Cell>
-  <Cell label="Desconto na tarifa">{!p?<Muted>—</Muted>:p.status==='identified'?(p.feeDiscount?m(p.feeDiscount):p.meliPercentage?<>ML cobre {p.meliPercentage.toLocaleString('pt-BR')}%<Note>do desconto · valor em R$ na Central</Note></>:<Muted>Sem desconto</Muted>):<><Muted>Não confirmado</Muted><Note>{p.reason}</Note></>}</Cell>
+  <Cell label="Subsídio por conta do Mercado Livre"><Subsidy offer={p} money={m}/></Cell>
   <Cell label="Frete">{d.freight!==null?<>{m(d.freight)}<Note>{d.freeShipping?'Grátis ao comprador · estimativa ML':'Estimativa do ML'}</Note></>:<Muted>Não informado</Muted>}</Cell>
  </>;
 }
@@ -71,7 +81,7 @@ function FamilyGroup({group,results,open,toggle,...rowProps}:{group:Group;result
  return <>
   <div className="gp-row gp-family">
    <div className="gp-title"><button type="button" className="gp-toggle" aria-expanded={open} onClick={toggle}><span aria-hidden="true">{open?'▾':'▸'}</span> <strong>{group.title}</strong></button><span><span className="gp-badge">Preço por variação</span> <span className="gp-note">Família {group.familyId} · {group.items.length} anúncios</span></span></div>
-   {loaded.length?<><Cell label="Preço normal">{range(loaded.map(d=>d.regularPrice))}</Cell><Cell label="Na promoção">{range(loaded.map(d=>d.promotionPrice))}</Cell><Cell label="Tarifa ML"><Muted>Por opção</Muted></Cell><Cell label="Desconto na tarifa"><Muted>Por opção</Muted></Cell><Cell label="Frete"><Muted>Por opção</Muted></Cell></>
+   {loaded.length?<><Cell label="Preço normal">{range(loaded.map(d=>d.regularPrice))}</Cell><Cell label="Na promoção">{range(loaded.map(d=>d.promotionPrice))}</Cell><Cell label="Tarifa ML"><Muted>Por opção</Muted></Cell><Cell label="Subsídio por conta do Mercado Livre"><Muted>Por opção</Muted></Cell><Cell label="Frete"><Muted>Por opção</Muted></Cell></>
     :<div className="gp-error gp-muted">Abra para consultar cada opção.</div>}
   </div>
   {open&&group.items.map(l=><Row key={l.itemId} listing={l} result={results[l.itemId]} child {...rowProps}/>)}
@@ -129,7 +139,7 @@ export default function SimpleCatalog(){
  {!loading&&!snapshot?.done&&snapshot&&<p className="small">Importação parcial. Atualize os anúncios para completar a lista.</p>}
  {!loading&&!busy&&snapshot&&snapshot.rows.length>0&&!snapshot.rows.some(r=>'familyId' in r)&&<p className="gp-note">Para agrupar anúncios com preço por variação, clique em Atualizar anúncios uma vez: importações anteriores não guardaram a família.</p>}
  {visible.length>0&&<div className="gp-table">
-  <div className="gp-row gp-head" aria-hidden="true"><span>Anúncio</span><span>Preço normal</span><span>Na promoção</span><span>Tarifa ML</span><span>Desconto na tarifa</span><span>Frete</span></div>
+  <div className="gp-row gp-head" aria-hidden="true"><span>Anúncio</span><span>Preço normal</span><span>Na promoção</span><span>Tarifa ML</span><span>Subsídio do Mercado Livre</span><span>Frete</span></div>
   {visible.map(g=>g.familyId?<FamilyGroup key={g.key} group={g} results={results} open={opened.has(g.key)||!!search} toggle={()=>toggle(g.key)} {...rowProps}/>:<Row key={g.key} listing={g.items[0]} result={results[g.items[0].itemId]} {...rowProps}/>)}
  </div>}
  {!loading&&!busy&&!search?.message&&!visible.length&&<p>{filter||kind!=='all'?'Nenhum anúncio encontrado.':'Nenhum anúncio importado. Clique em Atualizar anúncios para carregar sua lista.'}</p>}
