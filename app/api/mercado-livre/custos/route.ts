@@ -1,12 +1,8 @@
 import {actor,json,runtime} from '@/lib/mercado-livre';
 import {validCostKey} from '@/lib/product-costs';
+import {loadCostOverrides as overrides} from '@/lib/owner-settings';
 // Custos editados por produto (ou por SKU/MLB sem regra). Só leitura e escrita no banco do site;
 // nenhuma chamada ao Mercado Livre.
-type Row={product:string;cost_cents:number};
-async function overrides(owner:string){
- const {results}=await runtime().DB.prepare('SELECT product,cost_cents FROM product_costs WHERE owner=?').bind(owner).all<Row>();
- return Object.fromEntries(results.filter(r=>validCostKey(r.product)).map(r=>[r.product,r.cost_cents/100]));
-}
 export async function GET(){
  let owner:string;try{owner=await actor()}catch{return json({error:'Abra o gestor em uma nova aba e entre na sua conta.'},403)}
  try{return json({overrides:await overrides(owner)})}

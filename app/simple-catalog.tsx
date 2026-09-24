@@ -6,6 +6,7 @@ import type {CatalogRow} from '@/lib/ml-catalog';
 import type {SaleFee,ActiveOffer} from '@/lib/listing-fees';
 import {listingSearch} from '@/lib/listing-search';
 import {listingCost,defaultProducts,type ListingCost} from '@/lib/product-costs';
+import {OfferPanel,RulesPanel} from './offer-panel';
 type Snapshot={run:string;rows:CatalogRow[];done:boolean};
 type Summary={itemId:string;title:string;listingType:string;familyId:string|null;currency:string;regularPrice:number|null;promotionPrice:number|null;currentPrice:number|null;variationPrices:boolean;freight:number|null;freeShipping:boolean|null;saleFee:SaleFee|null;promotion:ActiveOffer|null};
 type Result={data?:Summary;error?:string};
@@ -83,8 +84,8 @@ function Values({result,retry}:{result?:Result;retry:()=>void}){
  </>;
 }
 
-function Row({listing,result,request,retry,paused,child,costs,save}:{listing:Listing;result?:Result;request:(id:string)=>void;retry:(id:string)=>void;paused:boolean;child?:boolean;costs:Record<string,ListingCost>;save:SaveCost}){
- const element=useRef<HTMLDivElement|null>(null);
+function Row({listing,result,request,retry,paused,child,costs,save,version}:{listing:Listing;result?:Result;request:(id:string)=>void;retry:(id:string)=>void;paused:boolean;child?:boolean;costs:Record<string,ListingCost>;save:SaveCost;version:number}){
+ const element=useRef<HTMLDivElement|null>(null),[offersOpen,setOffersOpen]=useState(false);
  // Consulta só quando a linha se aproxima da área visível; nada é carregado em massa ao abrir.
  useEffect(()=>{
   if(result||paused||!element.current)return;
@@ -95,13 +96,14 @@ function Row({listing,result,request,retry,paused,child,costs,save}:{listing:Lis
  },[listing.itemId,result,request,paused]);
  const d=result?.data;
  return <div className={'gp-row'+(child?' gp-child':'')} ref={element}>
-  <div className="gp-title"><strong>{child?listing.variation||listing.title:d?.title??listing.title}</strong><span className="gp-note">{[listing.itemId,d&&typeName(d.listingType),listing.sku].filter(Boolean).join(' · ')}</span></div>
+  <div className="gp-title"><strong>{child?listing.variation||listing.title:d?.title??listing.title}</strong><span className="gp-note">{[listing.itemId,d&&typeName(d.listingType),listing.sku].filter(Boolean).join(' · ')}</span><Button size="sm" variant="outline" type="button" className="gp-offers-toggle" aria-expanded={offersOpen} onClick={()=>setOffersOpen(o=>!o)}>{offersOpen?'Ocultar promoções':'Promoções'}</Button></div>
   <Values result={result} retry={()=>retry(listing.itemId)}/>
   <CostCell cost={costs[listing.itemId]} save={save}/>
+  {offersOpen&&<div className="gp-panel-wrap"><OfferPanel itemId={listing.itemId} version={version}/></div>}
  </div>;
 }
 
-function FamilyGroup({group,results,open,toggle,familyCost,...rowProps}:{group:Group;results:Record<string,Result>;open:boolean;toggle:()=>void;familyCost:ListingCost;request:(id:string)=>void;retry:(id:string)=>void;paused:boolean;costs:Record<string,ListingCost>;save:SaveCost}){
+function FamilyGroup({group,results,open,toggle,familyCost,...rowProps}:{group:Group;results:Record<string,Result>;open:boolean;toggle:()=>void;familyCost:ListingCost;request:(id:string)=>void;retry:(id:string)=>void;paused:boolean;costs:Record<string,ListingCost>;save:SaveCost;version:number}){
  const loaded=group.items.map(i=>results[i.itemId]?.data).filter((d):d is Summary=>!!d);
  const range=(values:(number|null)[])=>{const v=values.filter((n):n is number=>n!==null);if(!v.length||!loaded.length)return <Muted>Por opção</Muted>;const lo=Math.min(...v),hi=Math.max(...v),c=loaded[0].currency;return lo===hi?money(lo,c):money(lo,c)+' – '+money(hi,c)};
  return <>
@@ -119,12 +121,12 @@ export default function SimpleCatalog(){
  const [snapshot,setSnapshot]=useState<Snapshot|null>(null),[query,setQuery]=useState(''),[filter,setFilter]=useState(''),[kind,setKind]=useState<Filter>('all');
  const [busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[message,setMessage]=useState('');
  const [results,setResults]=useState<Record<string,Result>>({}),[opened,setOpened]=useState<Set<string>>(new Set());
- const [overrides,setOverrides]=useState<Record<string,number>>({}),[costNotice,setCostNotice]=useState('');
+ const [overrides,setOverrides]=useState<Record<string,number>>({}),[costNotice,setCostNotice]=useState(''),[version,setVersion]=useState(0);
  const alive=useRef(true),lock=useRef(false),queue=useRef<Promise<unknown>>(Promise.resolve()),requested=useRef(new Set<string>()),generation=useRef(0);
  useEffect(()=>{alive.current=true;fetch('/api/mercado-livre/anuncios',{cache:'no-store'}).then(async r=>{const d=await r.json() as Snapshot&{error?:string}|null;if(!r.ok)throw Error(d?.error||'Não foi possível carregar os anúncios.');if(alive.current)setSnapshot(d)}).catch(e=>{if(alive.current)setMessage(e instanceof Error?e.message:'Não foi possível carregar os anúncios.')}).finally(()=>{if(alive.current)setLoading(false)});return()=>{alive.current=false}},[]);
  useEffect(()=>{fetch('/api/mercado-livre/custos',{cache:'no-store'}).then(async r=>{const d=await r.json() as {overrides?:Record<string,number>;error?:string};if(!r.ok)throw Error(d.error||'Custos editados indisponíveis. Mostrando custos padrão.');if(alive.current)setOverrides(d.overrides??{})}).catch(e=>{if(alive.current)setCostNotice(e instanceof Error?e.message:'Custos editados indisponíveis. Mostrando custos padrão.')})},[]);
  const save=useCallback<SaveCost>(async(key,cost)=>{
-  try{const r=await fetch('/api/mercado-livre/custos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key,cost})});const d=await r.json() as {overrides?:Record<string,number>;error?:string};if(!r.ok||!d.overrides)return d.error||'Não foi possível salvar o custo.';if(alive.current){setOverrides(d.overrides);setCostNotice('')}return null}
+  try{const r=await fetch('/api/mercado-livre/custos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key,cost})});const d=await r.json() as {overrides?:Record<string,number>;error?:string};if(!r.ok||!d.overrides)return d.error||'Não foi possível salvar o custo.';if(alive.current){setOverrides(d.overrides);setCostNotice('');setVersion(v=>v+1)}return null}
   catch{return 'Não foi possível salvar o custo. Verifique a conexão.'}
  },[]);
  // Fila sequencial: uma consulta por vez evita renovações de token concorrentes.
@@ -163,7 +165,7 @@ export default function SimpleCatalog(){
   finally{if(alive.current)setBusy(false);lock.current=false;}
  }
  const toggle=(key:string)=>setOpened(s=>{const next=new Set(s);if(!next.delete(key))next.add(key);return next});
- const rowProps={request,retry,paused:busy,costs,save};
+ const rowProps={request,retry,paused:busy,costs,save,version};
  const filters:[Filter,string][]=[['all','Todos'],['promotion','Em promoção'],['variation','Preço por variação'],['failed','Com falha'],['nocost','Sem custo']];
  return <section className="panel simple-catalog"><div className="catalog-heading"><h1>Anúncios</h1><Button variant="outline" disabled={busy||loading} onClick={sync}>{busy?'Atualizando…':'Atualizar anúncios'}</Button></div>
  <div className="gp-metrics">{filters.map(([k,label])=><button key={k} type="button" className="gp-metric" aria-pressed={kind===k} onClick={()=>setKind(k)}><span>{label}</span><strong className={(k==='failed'||k==='nocost')&&counts[k]?'gp-danger':''}>{counts[k]}</strong></button>)}</div>
@@ -171,6 +173,7 @@ export default function SimpleCatalog(){
  <form className="simple-search" onSubmit={e=>{e.preventDefault();setFilter(query.trim());setMessage('')}}><label htmlFor="listing-search">Filtrar por anúncio, MLB ou SKU<Input id="listing-search" placeholder="Todos os anúncios · digite para filtrar" value={query} onChange={e=>{setQuery(e.target.value);if(!e.target.value.trim()){setFilter('');setMessage('')}}}/></label><Button type="submit">Buscar</Button>{filter&&<Button variant="outline" onClick={()=>{setQuery('');setFilter('');setMessage('')}} type="button">Ver todos</Button>}</form>
  {message&&<p role="status">{message}</p>}
  {costNotice&&<p role="status" className="gp-danger">{costNotice}</p>}
+ <RulesPanel onSaved={()=>setVersion(v=>v+1)}/>
  {search?.message&&<p role="status">{search.message}</p>}
  {loading&&<p role="status">Carregando anúncios…</p>}
  {!loading&&!snapshot?.done&&snapshot&&<p className="small">Importação parcial. Atualize os anúncios para completar a lista.</p>}
