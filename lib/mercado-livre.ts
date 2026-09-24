@@ -4,8 +4,10 @@ import {getChatGPTUser} from "@/app/chatgpt-auth";
 import {accessUser} from "./access-auth";
 // Hospedagem: sem variáveis = ChatGPT Sites (login ChatGPT); AUTH_MODE=cloudflare-access = Cloudflare própria,
 // onde só o JWT do Access é aceito (cabeçalhos oai-* seriam falsificáveis fora do Sites).
-const hosting=env as unknown as {AUTH_MODE?:string;PUBLIC_ORIGIN?:string;CF_ACCESS_TEAM_DOMAIN?:string;CF_ACCESS_AUD?:string};
+const hosting=env as unknown as {PARTICIPATION_ENABLED?:string;AUTH_MODE?:string;PUBLIC_ORIGIN?:string;CF_ACCESS_TEAM_DOMAIN?:string;CF_ACCESS_AUD?:string};
 export const ACCESS_MODE=hosting.AUTH_MODE==="cloudflare-access";
+// Adesões: desligadas por padrão; ligadas só com PARTICIPATION_ENABLED=true na hospedagem própria.
+export const PARTICIPATION_ENABLED=ACCESS_MODE&&hosting.PARTICIPATION_ENABLED==="true";
 export const ORIGIN=hosting.PUBLIC_ORIGIN||"https://gestor-promocoes-dherik.dherikjcamargo.chatgpt.site";
 export const REDIRECT=ORIGIN+"/integracoes/mercado-livre/retorno";
 export const COOKIE="__Host-ml-oauth";

@@ -29,6 +29,13 @@
       "when": 1790263010192,
       "tag": "0003_clumsy_mastermind",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1790277257905,
+      "tag": "0004_slim_black_knight",
+      "breakpoints": true
     }
   ]
 }

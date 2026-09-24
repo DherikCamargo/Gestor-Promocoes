@@ -32,6 +32,7 @@ const ownHosting = ownDatabaseId
         CF_ACCESS_TEAM_DOMAIN: own("CF_ACCESS_TEAM_DOMAIN"),
         CF_ACCESS_AUD: own("CF_ACCESS_AUD"),
         ML_CLIENT_ID: own("ML_CLIENT_ID"),
+        PARTICIPATION_ENABLED: process.env.PARTICIPATION_ENABLED === "true" ? "true" : "false",
       },
     }
   : {};

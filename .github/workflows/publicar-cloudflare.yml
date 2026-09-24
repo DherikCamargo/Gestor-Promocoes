@@ -30,6 +30,7 @@ jobs:
       CF_ACCESS_TEAM_DOMAIN: ${{ vars.CF_ACCESS_TEAM_DOMAIN }}
       CF_ACCESS_AUD: ${{ vars.CF_ACCESS_AUD }}
       ML_CLIENT_ID: ${{ vars.ML_CLIENT_ID }}
+      PARTICIPATION_ENABLED: ${{ vars.PARTICIPATION_ENABLED }}
       WRANGLER_SEND_METRICS: "false"
     steps:
       - uses: actions/checkout@v4
