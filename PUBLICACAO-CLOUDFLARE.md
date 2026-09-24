@@ -1,5 +1,7 @@
 # Publicação própria na Cloudflare
 
+**Situação (24/09/2026): migração concluída.** Gestor em https://gestor-promocoes.dherikjgk.workers.dev, login pelo Access (equipe icy-pond-1323.cloudflareaccess.com, política só para o e-mail do proprietário, destino = URLs de produção e visualização do Worker gestor-promocoes). Conta do Mercado Livre reconectada e anúncios importados no banco novo. Variáveis e segredos configurados no GitHub (valores dos segredos só no GitHub e na Cloudflare).
+
 Decisão de Dherik (24/09/2026): deixar de depender do ChatGPT Sites para publicar, porque o limite de uso do ChatGPT interrompe a automação. O gestor passa a rodar num Worker da conta Cloudflare do proprietário, com login pelo Cloudflare Access, e cada merge na `main` publica pelo GitHub Actions (`.github/workflows/publicar-cloudflare.yml`).
 
 ## Como o código decide a hospedagem
@@ -38,3 +40,9 @@ Cada merge na `main` roda testes, build, migrações do D1, publicação e a con
 - `wrangler deploy --dry-run` com a configuração própria: 857 KiB (limite do plano gratuito: 3 MiB), bindings DB e vars corretos.
 - Não validado localmente (Windows, "write EOF" do workerd): aplicação das migrações `drizzle/` pelo `wrangler d1 migrations apply`. A primeira execução do workflow confirma; se falhar, o passo para antes de publicar.
 - ESLint/tsc sem erros novos (o erro set-state-in-effect em app/connection.tsx já existia).
+
+## Histórico da configuração (24/09/2026)
+- Primeira publicação (workflow manual) com AUD provisório "pendente": 4 migrações aplicadas no D1; rotas de dados recusavam acesso (403), inclusive com cabeçalho oai-* falsificado.
+- Access criado pela aba de aplicativos auto-hospedados com destino "Workers → gestor-promocoes → URLs de produção e visualização"; o AUD real foi lido do redirecionamento de login e cadastrado; segunda publicação com login funcionando.
+- "Salvar chave secreta" falhou por ML_ENCRYPTION_KEY colada com aspas/texto a mais. O workflow passou a conferir o formato do segredo (scripts/check-encryption-key.mjs) e barrou a publicação seguinte até a correção. A chave foi regravada direto pelo terminal (`node … | gh secret set ML_ENCRYPTION_KEY --repo …`), sem copiar o valor.
+- Primeira publicação automática disparada por merge (PR #11) confirmada.
