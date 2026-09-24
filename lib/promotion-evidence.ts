@@ -22,3 +22,12 @@ export function itemEvidence(raw:unknown){
   scope:'Somente o anúncio consultado e as variações retornadas nele. Outros anúncios da família não foram consultados.',
  };
 }
+// Cópia integral de uma resposta de promoção para diagnóstico: mantém todos os campos
+// (inclusive os que ainda não conhecemos), descarta chaves com aparência de credencial.
+const secretKey=/token|secret|authorization|password|cookie/i;
+export function fullRecord(v:unknown,depth=0):unknown{
+ if(v===null||['string','boolean'].includes(typeof v)||(typeof v==='number'&&Number.isFinite(v)))return v;
+ if(depth>=6||typeof v!=='object')return null;
+ if(Array.isArray(v))return v.slice(0,50).map(x=>fullRecord(x,depth+1));
+ return Object.fromEntries(Object.entries(v as Data).filter(([k])=>!secretKey.test(k)).map(([k,x])=>[k,fullRecord(x,depth+1)]));
+}

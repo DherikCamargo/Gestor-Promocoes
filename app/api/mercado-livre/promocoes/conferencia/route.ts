@@ -1,6 +1,6 @@
 import {actor,json} from '@/lib/mercado-livre';
 import {mlSession,MlError} from '@/lib/ml-api';
-import {itemEvidence,pick} from '@/lib/promotion-evidence';
+import {itemEvidence,pick,record,fullRecord} from '@/lib/promotion-evidence';
 import {promotionPriceIssues} from '@/lib/promotion-price';
 import {familyKey} from '@/lib/ml-family';
 import {lightningEvidence} from '@/lib/lightning-evidence';
@@ -28,7 +28,18 @@ export async function GET(request:Request){
   if(!Array.isArray(raw))throw new MlError('O Mercado Livre retornou um formato de ofertas não reconhecido.',502);
   const offers=raw.filter(v=>v&&typeof v==='object').map(v=>({...pick(v,fields),issues:promotionPriceIssues(v)}));
   const lightning=new URL(request.url).searchParams.get('details')==='lightning'?await lightningEvidence(api,itemId,raw):undefined;
+  // Oferta ativa (ref_id = sale_price.metadata.promotion_id) exportada sem lista de campos,
+  // para localizar valores que a Central exibe e a lista fixa acima não inclui.
+  const activeRef=saleResult.ok?record(record(saleResult.data).metadata).promotion_id:undefined;
+  const actives=typeof activeRef==='string'&&activeRef?raw.map(record).filter(o=>o.ref_id===activeRef):[];
+  let activeOffer:unknown={ok:false,refId:activeRef??null,matches:actives.length,error:'Oferta ativa não identificada de forma única.'};
+  if(actives.length===1){
+   const o=actives[0],pid=String(o.id??''),type=String(o.type??'');
+   const campaignPath=/^[A-Za-z0-9_-]+$/.test(pid)&&/^[A-Z_]+$/.test(type)?'/seller-promotions/promotions/'+encodeURIComponent(pid)+'/items?'+new URLSearchParams({promotion_type:type,item_id:itemId,app_version:'v2'}):null;
+   const campaign=campaignPath?await api.get<unknown>(campaignPath).then(v=>({ok:true,data:fullRecord(v)}),()=>({ok:false,error:'A consulta da campanha falhou.'})):null;
+   activeOffer={ok:true,refId:activeRef,itemSource:fullRecord(o),campaignSource:campaignPath?{source:campaignPath,...campaign}:null,salePriceSource:fullRecord(saleResult.ok?saleResult.data:null)};
+  }
   const salePrice=saleResult.ok?{ok:true,context:'channel_marketplace',...pick(saleResult.data,['price_id','amount','regular_amount','currency_id']),metadata:pick((saleResult.data as Record<string,unknown>)?.metadata,['promotion_id','promotion_type','variation_id'])}:{ok:false,status:saleResult.status,error:'Preço de venda não confirmado nesta consulta.'};
-  return json({schemaVersion:2,itemId,queriedAt:new Date().toISOString(),source:'seller-promotions/items',sources:['items','items/sale_price?context=channel_marketplace','seller-promotions/items?app_version=v2'],readOnly:true,participationBlocked:true,item:itemEvidence(item),salePrice,offers,lightning});
+  return json({schemaVersion:2,itemId,queriedAt:new Date().toISOString(),source:'seller-promotions/items',sources:['items','items/sale_price?context=channel_marketplace','seller-promotions/items?app_version=v2'],readOnly:true,participationBlocked:true,item:itemEvidence(item),salePrice,offers,activeOffer,lightning});
  }catch(e){return json({error:e instanceof MlError?e.message:'Não foi possível consultar as ofertas. Tente novamente.'},e instanceof MlError?e.status:503)}
 }

@@ -12,6 +12,7 @@ type Listing={itemId:string;title:string;sku:string;variation:string;familyId:st
 type Group={key:string;familyId:string|null;title:string;items:Listing[]};
 type Filter='all'|'promotion'|'variation'|'failed';
 const money=(n:number,currency:string)=>new Intl.NumberFormat('pt-BR',{style:'currency',currency}).format(n);
+const shortList=(skus:string[])=>skus.length>3?skus.slice(0,2).join(', ')+' e mais '+(skus.length-2)+' SKUs':skus.join(', ');
 const typeName=(t:string)=>t==='gold_special'?'Clássico':t==='gold_pro'?'Premium':t;
 const Muted=({children}:{children:ReactNode})=><span className="gp-muted">{children}</span>;
 const Note=({children}:{children:ReactNode})=><span className="gp-note">{children}</span>;
@@ -21,7 +22,7 @@ const Cell=({label,children}:{label:string;children:ReactNode})=><div className=
 function groupRows(rows:CatalogRow[]):Group[]{
  const byItem=new Map<string,CatalogRow[]>();
  for(const r of rows)byItem.set(r.itemId,[...(byItem.get(r.itemId)??[]),r]);
- const listings:Listing[]=[...byItem.values()].map(list=>({itemId:list[0].itemId,title:list[0].title,familyId:list[0].familyId??null,sku:[...new Set(list.map(r=>r.sku).filter(Boolean))].join(', '),variation:list.length>1?list.length+' opções':list[0].variation}));
+ const listings:Listing[]=[...byItem.values()].map(list=>({itemId:list[0].itemId,title:list[0].title,familyId:list[0].familyId??null,sku:shortList([...new Set(list.map(r=>r.sku).filter(Boolean))]),variation:list.length>1?list.length+' opções':list[0].variation}));
  const families=new Map<string,Listing[]>();
  for(const l of listings)if(l.familyId)families.set(l.familyId,[...(families.get(l.familyId)??[]),l]);
  const seen=new Set<string>(),groups:Group[]=[];
@@ -42,7 +43,7 @@ function Values({result,retry}:{result?:Result;retry:()=>void}){
   <Cell label="Preço normal">{d.regularPrice!==null?m(d.regularPrice):<Muted>{d.variationPrices?'Varia por opção':'Não informado'}</Muted>}</Cell>
   <Cell label="Na promoção">{d.promotionPrice!==null?<>{m(d.promotionPrice)}{p?.status==='identified'&&p.name&&<Note>{p.name}</Note>}</>:<Muted>{d.currentPrice!==null?'Sem promoção':'Não informado'}</Muted>}</Cell>
   <Cell label="Tarifa ML">{d.saleFee?<>{m(d.saleFee.amount)}{d.saleFee.percentage!==null&&<Note>{d.saleFee.percentage.toLocaleString('pt-BR')}%{d.saleFee.fixed?' + '+m(d.saleFee.fixed)+' fixo':''}</Note>}</>:<Muted>Não informado</Muted>}</Cell>
-  <Cell label="Desconto na tarifa">{!p?<Muted>—</Muted>:p.status==='identified'?(p.feeDiscount>0?m(p.feeDiscount):<Muted>Sem desconto</Muted>):<><Muted>Não confirmado</Muted><Note>{p.reason}</Note></>}</Cell>
+  <Cell label="Desconto na tarifa">{!p?<Muted>—</Muted>:p.status==='identified'?(p.feeDiscount?m(p.feeDiscount):p.meliPercentage?<>ML cobre {p.meliPercentage.toLocaleString('pt-BR')}%<Note>do desconto · valor em R$ na Central</Note></>:<Muted>Sem desconto</Muted>):<><Muted>Não confirmado</Muted><Note>{p.reason}</Note></>}</Cell>
   <Cell label="Frete">{d.freight!==null?<>{m(d.freight)}<Note>{d.freeShipping?'Grátis ao comprador · estimativa ML':'Estimativa do ML'}</Note></>:<Muted>Não informado</Muted>}</Cell>
  </>;
 }
