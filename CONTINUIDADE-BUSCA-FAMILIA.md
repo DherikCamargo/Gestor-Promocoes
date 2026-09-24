@@ -15,3 +15,8 @@ Validação: oito assertions locais passaram (família não vira MLB, orientaç�
 Não houve chamada autenticada à conta ML nem teste visual de produção. Adesões continuam bloqueadas.
 
 Entrega via pull request e merge deve acionar Publicar Gestor de Promoções. Este documento registra implementação e validação local; status de produção só pode ser afirmado após deployment succeeded. A automação deve emitir continuidade com os SHAs GitHub/Sites e versão publicada. Documentação original: Continuidade-Gestor-Promocoes-v32.md; publicação: AUTOMACAO-PUBLICACAO.md.
+
+## Testes automatizados (23/09/2026)
+As assertions acima passaram a existir no repositório em tests/listing-search.test.mjs (7 testes, node:test, sem dependências novas; pnpm-lock.yaml inalterado). Executar com `pnpm test` (Node >=22.13; usa --experimental-strip-types para importar lib/listing-search.ts).
+Validação: 7/7 passaram no Node 24.19 (Windows). Reintroduzindo temporariamente o comportamento antigo (número sem prefixo virando MLB), 5 testes falharam, confirmando a cobertura da regressão. pnpm run build concluído.
+Observação: na main, `tsc --noEmit` e `pnpm run lint` já falhavam antes desta mudança (erros de tipo em app/simple-catalog.tsx; erros de lint em app/connection.tsx e app/diagnostico/page.tsx); não foram tratados aqui. Nenhuma chamada à conta ML; adesões continuam bloqueadas.
