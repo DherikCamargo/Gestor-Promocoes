@@ -1,62 +1,136 @@
 'use client';
-import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
+import {useCallback,useEffect,useMemo,useRef,useState,type ReactNode} from 'react';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import type {CatalogRow} from '@/lib/ml-catalog';
+import type {SaleFee,ActiveOffer} from '@/lib/listing-fees';
 import {listingSearch} from '@/lib/listing-search';
 type Snapshot={run:string;rows:CatalogRow[];done:boolean};
-type Summary={itemId:string;title:string;listingType:string;currency:string;regularPrice:number|null;promotionPrice:number|null;currentPrice:number|null;variationPrices:boolean;freight:number|null;freeShipping:boolean|null};
-type Entry={itemId:string;title:string;data?:Summary;error?:string};
-type Loader=(id:string,active:()=>boolean)=>Promise<Summary|null>;
+type Summary={itemId:string;title:string;listingType:string;familyId:string|null;currency:string;regularPrice:number|null;promotionPrice:number|null;currentPrice:number|null;variationPrices:boolean;freight:number|null;freeShipping:boolean|null;saleFee:SaleFee|null;promotion:ActiveOffer|null};
+type Result={data?:Summary;error?:string};
+type Listing={itemId:string;title:string;sku:string;variation:string;familyId:string|null};
+type Group={key:string;familyId:string|null;title:string;items:Listing[]};
+type Filter='all'|'promotion'|'variation'|'failed';
 const money=(n:number,currency:string)=>new Intl.NumberFormat('pt-BR',{style:'currency',currency}).format(n);
-function Listing({item,load,paused}:{item:Entry;load:Loader;paused:boolean}){
- const [entry,setEntry]=useState<Entry>(item);
- const element=useRef<HTMLElement|null>(null);
- useEffect(()=>{
-  if(paused)return;
-  let active=true,requested=false;
-  const request=()=>{if(requested)return;requested=true;void load(item.itemId,()=>active).then(data=>{if(active&&data)setEntry({...item,title:data.title,data})}).catch(e=>{if(active)setEntry({...item,error:e instanceof Error?e.message:'Consulta indisponível.'})})};
-  if(!('IntersectionObserver' in window)){request();return()=>{active=false}}
-  const observer=new IntersectionObserver(records=>{if(records.some(r=>r.isIntersecting)){observer.disconnect();request()}},{rootMargin:'240px'});
-  if(element.current)observer.observe(element.current);
-  return()=>{active=false;observer.disconnect()};
- },[item,load,paused]);
- return <article className="simple-listing" ref={element}><div><h2>{entry.title}</h2><p className="small">{entry.itemId}</p></div>
- {entry.data?<><div><span className="simple-label">Preço normal</span><strong>{entry.data.regularPrice===null?entry.data.variationPrices?'Varia por opção':'Não informado':money(entry.data.regularPrice,entry.data.currency)}</strong><span className="simple-label">Em promoção</span><strong className="sale-value">{entry.data.promotionPrice!==null?money(entry.data.promotionPrice,entry.data.currency):entry.data.currentPrice!==null?'Sem promoção informada':'Não informado'}</strong></div>
- <div><span className="simple-label">Tipo do anúncio</span><strong>{entry.data.listingType==='gold_special'?'Clássico':entry.data.listingType==='gold_pro'?'Premium':entry.data.listingType||'Não informado'}</strong></div>
- <div><span className="simple-label">Frete por sua conta</span><strong>{entry.data.freight===null?'Não informado':money(entry.data.freight,entry.data.currency)}</strong>{entry.data.freight!==null&&<p className="small">Estimativa do ML</p>}{entry.data.freeShipping===true&&<p className="small">Grátis para o comprador</p>}</div></>:<p className={entry.error?"simple-error":"small"} role={entry.error?"alert":"status"}>{entry.error||"Consultando preços e frete…"}</p>}</article>;
+const typeName=(t:string)=>t==='gold_special'?'Clássico':t==='gold_pro'?'Premium':t;
+const Muted=({children}:{children:ReactNode})=><span className="gp-muted">{children}</span>;
+const Note=({children}:{children:ReactNode})=><span className="gp-note">{children}</span>;
+const Cell=({label,children}:{label:string;children:ReactNode})=><div className="gp-cell"><span className="gp-label">{label}</span>{children}</div>;
+
+// Um grupo por família com mais de um MLB (preço por variação); demais anúncios ficam sozinhos.
+function groupRows(rows:CatalogRow[]):Group[]{
+ const byItem=new Map<string,CatalogRow[]>();
+ for(const r of rows)byItem.set(r.itemId,[...(byItem.get(r.itemId)??[]),r]);
+ const listings:Listing[]=[...byItem.values()].map(list=>({itemId:list[0].itemId,title:list[0].title,familyId:list[0].familyId??null,sku:[...new Set(list.map(r=>r.sku).filter(Boolean))].join(', '),variation:list.length>1?list.length+' opções':list[0].variation}));
+ const families=new Map<string,Listing[]>();
+ for(const l of listings)if(l.familyId)families.set(l.familyId,[...(families.get(l.familyId)??[]),l]);
+ const seen=new Set<string>(),groups:Group[]=[];
+ for(const l of listings){
+  const family=l.familyId?families.get(l.familyId)??[]:[];
+  if(family.length<2)groups.push({key:l.itemId,familyId:null,title:l.title,items:[l]});
+  else if(!seen.has(l.familyId!)){seen.add(l.familyId!);groups.push({key:'f:'+l.familyId,familyId:l.familyId,title:l.title,items:family});}
+ }
+ return groups;
 }
+
+function Values({result,retry}:{result?:Result;retry:()=>void}){
+ if(result?.error)return <div className="gp-error" role="alert"><span>{result.error}</span><Button variant="outline" size="sm" onClick={retry}>Tentar de novo</Button></div>;
+ const d=result?.data;
+ if(!d)return <div className="gp-error gp-muted" role="status">Consultando preços, tarifa e frete…</div>;
+ const m=(n:number)=>money(n,d.currency),p=d.promotion;
+ return <>
+  <Cell label="Preço normal">{d.regularPrice!==null?m(d.regularPrice):<Muted>{d.variationPrices?'Varia por opção':'Não informado'}</Muted>}</Cell>
+  <Cell label="Na promoção">{d.promotionPrice!==null?<>{m(d.promotionPrice)}{p?.status==='identified'&&p.name&&<Note>{p.name}</Note>}</>:<Muted>{d.currentPrice!==null?'Sem promoção':'Não informado'}</Muted>}</Cell>
+  <Cell label="Tarifa ML">{d.saleFee?<>{m(d.saleFee.amount)}{d.saleFee.percentage!==null&&<Note>{d.saleFee.percentage.toLocaleString('pt-BR')}%{d.saleFee.fixed?' + '+m(d.saleFee.fixed)+' fixo':''}</Note>}</>:<Muted>Não informado</Muted>}</Cell>
+  <Cell label="Desconto na tarifa">{!p?<Muted>—</Muted>:p.status==='identified'?(p.feeDiscount>0?m(p.feeDiscount):<Muted>Sem desconto</Muted>):<><Muted>Não confirmado</Muted><Note>{p.reason}</Note></>}</Cell>
+  <Cell label="Frete">{d.freight!==null?<>{m(d.freight)}<Note>{d.freeShipping?'Grátis ao comprador · estimativa ML':'Estimativa do ML'}</Note></>:<Muted>Não informado</Muted>}</Cell>
+ </>;
+}
+
+function Row({listing,result,request,retry,paused,child}:{listing:Listing;result?:Result;request:(id:string)=>void;retry:(id:string)=>void;paused:boolean;child?:boolean}){
+ const element=useRef<HTMLDivElement|null>(null);
+ // Consulta só quando a linha se aproxima da área visível; nada é carregado em massa ao abrir.
+ useEffect(()=>{
+  if(result||paused||!element.current)return;
+  if(!('IntersectionObserver' in window)){request(listing.itemId);return}
+  const observer=new IntersectionObserver(records=>{if(records.some(r=>r.isIntersecting)){observer.disconnect();request(listing.itemId)}},{rootMargin:'240px'});
+  observer.observe(element.current);
+  return()=>observer.disconnect();
+ },[listing.itemId,result,request,paused]);
+ const d=result?.data;
+ return <div className={'gp-row'+(child?' gp-child':'')} ref={element}>
+  <div className="gp-title"><strong>{child?listing.variation||listing.title:d?.title??listing.title}</strong><span className="gp-note">{[listing.itemId,d&&typeName(d.listingType),listing.sku].filter(Boolean).join(' · ')}</span></div>
+  <Values result={result} retry={()=>retry(listing.itemId)}/>
+ </div>;
+}
+
+function FamilyGroup({group,results,open,toggle,...rowProps}:{group:Group;results:Record<string,Result>;open:boolean;toggle:()=>void;request:(id:string)=>void;retry:(id:string)=>void;paused:boolean}){
+ const loaded=group.items.map(i=>results[i.itemId]?.data).filter((d):d is Summary=>!!d);
+ const range=(values:(number|null)[])=>{const v=values.filter((n):n is number=>n!==null);if(!v.length||!loaded.length)return <Muted>Por opção</Muted>;const lo=Math.min(...v),hi=Math.max(...v),c=loaded[0].currency;return lo===hi?money(lo,c):money(lo,c)+' – '+money(hi,c)};
+ return <>
+  <div className="gp-row gp-family">
+   <div className="gp-title"><button type="button" className="gp-toggle" aria-expanded={open} onClick={toggle}><span aria-hidden="true">{open?'▾':'▸'}</span> <strong>{group.title}</strong></button><span><span className="gp-badge">Preço por variação</span> <span className="gp-note">Família {group.familyId} · {group.items.length} anúncios</span></span></div>
+   {loaded.length?<><Cell label="Preço normal">{range(loaded.map(d=>d.regularPrice))}</Cell><Cell label="Na promoção">{range(loaded.map(d=>d.promotionPrice))}</Cell><Cell label="Tarifa ML"><Muted>Por opção</Muted></Cell><Cell label="Desconto na tarifa"><Muted>Por opção</Muted></Cell><Cell label="Frete"><Muted>Por opção</Muted></Cell></>
+    :<div className="gp-error gp-muted">Abra para consultar cada opção.</div>}
+  </div>
+  {open&&group.items.map(l=><Row key={l.itemId} listing={l} result={results[l.itemId]} child {...rowProps}/>)}
+ </>;
+}
+
 export default function SimpleCatalog(){
- const [snapshot,setSnapshot]=useState<Snapshot|null>(null),[query,setQuery]=useState(''),[filter,setFilter]=useState('');
+ const [snapshot,setSnapshot]=useState<Snapshot|null>(null),[query,setQuery]=useState(''),[filter,setFilter]=useState(''),[kind,setKind]=useState<Filter>('all');
  const [busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[message,setMessage]=useState('');
- const alive=useRef(true),lock=useRef(false),queue=useRef<Promise<unknown>>(Promise.resolve()),cache=useRef(new Map<string,Summary>());
- useEffect(()=>{alive.current=true;fetch('/api/mercado-livre/anuncios',{cache:'no-store'}).then(async r=>{const d=await r.json();if(!r.ok)throw Error(d.error||'Não foi possível carregar os anúncios.');if(alive.current)setSnapshot(d)}).catch(e=>{if(alive.current)setMessage(e.message)}).finally(()=>{if(alive.current)setLoading(false)});return()=>{alive.current=false}},[]);
- const load=useCallback<Loader>((id,active)=>{
-  const key=(snapshot?.run??'direct')+':'+id;
-  const task=queue.current.then(async()=>{
-   if(!active())return null;
-   const saved=cache.current.get(key);if(saved)return saved;
-   const r=await fetch('/api/mercado-livre/anuncios/resumo?itemId='+id,{cache:'no-store'});
-   const data=await r.json();if(!r.ok)throw Error(data.error||'Consulta indisponível.');
-   cache.current.set(key,data);return data as Summary;
+ const [results,setResults]=useState<Record<string,Result>>({}),[opened,setOpened]=useState<Set<string>>(new Set());
+ const alive=useRef(true),lock=useRef(false),queue=useRef<Promise<unknown>>(Promise.resolve()),requested=useRef(new Set<string>()),generation=useRef(0);
+ useEffect(()=>{alive.current=true;fetch('/api/mercado-livre/anuncios',{cache:'no-store'}).then(async r=>{const d=await r.json() as Snapshot&{error?:string}|null;if(!r.ok)throw Error(d?.error||'Não foi possível carregar os anúncios.');if(alive.current)setSnapshot(d)}).catch(e=>{if(alive.current)setMessage(e instanceof Error?e.message:'Não foi possível carregar os anúncios.')}).finally(()=>{if(alive.current)setLoading(false)});return()=>{alive.current=false}},[]);
+ // Fila sequencial: uma consulta por vez evita renovações de token concorrentes.
+ const request=useCallback((id:string)=>{
+  if(busy||requested.current.has(id))return;
+  requested.current.add(id);const gen=generation.current;
+  queue.current=queue.current.then(async()=>{
+   if(!alive.current||gen!==generation.current||!requested.current.has(id))return;
+   let result:Result;
+   try{const r=await fetch('/api/mercado-livre/anuncios/resumo?itemId='+id,{cache:'no-store'});const d=await r.json() as Summary&{error?:string};result=r.ok?{data:d}:{error:d.error||'Consulta indisponível.'}}
+   catch{result={error:'Consulta indisponível. Verifique a conexão e tente de novo.'}}
+   if(alive.current&&gen===generation.current&&requested.current.has(id))setResults(s=>({...s,[id]:result}));
   });
-  queue.current=task.catch(()=>{});return task;
- },[snapshot?.run]);
- const result=useMemo(()=>filter.trim()?listingSearch(filter,snapshot?.rows??[]):{entries:Array.from(new Map((snapshot?.rows??[]).map(r=>[r.itemId,{itemId:r.itemId,title:r.title}])).values()),message:''},[filter,snapshot]);
+ },[busy]);
+ const retry=useCallback((id:string)=>{requested.current.delete(id);setResults(s=>{const next={...s};delete next[id];return next})},[]);
+ const groups=useMemo(()=>groupRows(snapshot?.rows??[]),[snapshot]);
+ const search=useMemo(()=>filter.trim()?listingSearch(filter,snapshot?.rows??[]):null,[filter,snapshot]);
+ const visible=useMemo(()=>{
+  const ids=search?new Set(search.entries.map(e=>e.itemId)):null,known=new Set(groups.flatMap(g=>g.items.map(i=>i.itemId)));
+  // MLB completo fora do catálogo importado continua consultável diretamente.
+  const direct:Group[]=(search?.entries??[]).filter(e=>!known.has(e.itemId)).map(e=>({key:e.itemId,familyId:null,title:e.title,items:[{itemId:e.itemId,title:e.title,sku:'',variation:'',familyId:null}]}));
+  return [...direct,...groups.filter(g=>!ids||g.items.some(i=>ids.has(i.itemId)))].filter(g=>kind==='all'
+   ||kind==='variation'&&g.familyId!==null
+   ||kind==='promotion'&&g.items.some(i=>results[i.itemId]?.data?.promotionPrice!=null)
+   ||kind==='failed'&&g.items.some(i=>results[i.itemId]?.error));
+ },[groups,search,kind,results]);
+ const counts={all:groups.reduce((n,g)=>n+g.items.length,0),promotion:Object.values(results).filter(r=>r.data?.promotionPrice!=null).length,variation:groups.filter(g=>g.familyId).length,failed:Object.values(results).filter(r=>r.error).length};
  async function sync(){
   if(lock.current)return;lock.current=true;setBusy(true);setMessage('Atualizando anúncios…');let current=snapshot;
-  try{let action='start';do{const r=await fetch('/api/mercado-livre/anuncios',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,run:current?.run})});const d=await r.json();if(!r.ok)throw Error(d.error||'Não foi possível atualizar.');current=d;action='next';if(alive.current)setSnapshot(d);}while(current&&!current.done&&alive.current);
-   if(alive.current){cache.current.clear();setMessage('Anúncios atualizados.');setFilter('');setQuery('');}
+  try{let action='start';do{const r=await fetch('/api/mercado-livre/anuncios',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,run:current?.run})});const d=await r.json() as Snapshot&{error?:string};if(!r.ok)throw Error(d.error||'Não foi possível atualizar.');current=d;action='next';if(alive.current)setSnapshot(d);}while(current&&!current.done&&alive.current);
+   if(alive.current){generation.current++;requested.current.clear();setResults({});setMessage('Anúncios atualizados.');setFilter('');setQuery('');}
   }catch(e){if(alive.current)setMessage(e instanceof Error?e.message:'Não foi possível atualizar.')}
   finally{if(alive.current)setBusy(false);lock.current=false;}
  }
+ const toggle=(key:string)=>setOpened(s=>{const next=new Set(s);if(!next.delete(key))next.add(key);return next});
+ const rowProps={request,retry,paused:busy};
+ const filters:[Filter,string][]=[['all','Todos'],['promotion','Em promoção'],['variation','Preço por variação'],['failed','Com falha']];
  return <section className="panel simple-catalog"><div className="catalog-heading"><h1>Anúncios</h1><Button variant="outline" disabled={busy||loading} onClick={sync}>{busy?'Atualizando…':'Atualizar anúncios'}</Button></div>
+ <div className="gp-metrics">{filters.map(([k,label])=><button key={k} type="button" className="gp-metric" aria-pressed={kind===k} onClick={()=>setKind(k)}><span>{label}</span><strong className={k==='failed'&&counts.failed?'gp-danger':''}>{counts[k]}</strong></button>)}</div>
+ <p className="gp-note">Em promoção e Com falha contam apenas os anúncios já consultados; a consulta acontece conforme você rola a lista.</p>
  <form className="simple-search" onSubmit={e=>{e.preventDefault();setFilter(query.trim());setMessage('')}}><label htmlFor="listing-search">Filtrar por anúncio, MLB ou SKU<Input id="listing-search" placeholder="Todos os anúncios · digite para filtrar" value={query} onChange={e=>{setQuery(e.target.value);if(!e.target.value.trim()){setFilter('');setMessage('')}}}/></label><Button type="submit">Buscar</Button>{filter&&<Button variant="outline" onClick={()=>{setQuery('');setFilter('');setMessage('')}} type="button">Ver todos</Button>}</form>
  {message&&<p role="status">{message}</p>}
- {result.message&&<p role="status">{result.message}</p>}
+ {search?.message&&<p role="status">{search.message}</p>}
  {loading&&<p role="status">Carregando anúncios…</p>}
  {!loading&&!snapshot?.done&&snapshot&&<p className="small">Importação parcial. Atualize os anúncios para completar a lista.</p>}
- <div>{result.entries.map(item=><Listing key={(snapshot?.run??'direct')+':'+item.itemId} item={item} load={load} paused={busy}/>)}</div>
- {!loading&&!busy&&!result.message&&!result.entries.length&&<p>{filter?'Nenhum anúncio encontrado.':'Nenhum anúncio importado. Clique em Atualizar anúncios para carregar sua lista.'}</p>}
+ {!loading&&!busy&&snapshot&&snapshot.rows.length>0&&!snapshot.rows.some(r=>'familyId' in r)&&<p className="gp-note">Para agrupar anúncios com preço por variação, clique em Atualizar anúncios uma vez: importações anteriores não guardaram a família.</p>}
+ {visible.length>0&&<div className="gp-table">
+  <div className="gp-row gp-head" aria-hidden="true"><span>Anúncio</span><span>Preço normal</span><span>Na promoção</span><span>Tarifa ML</span><span>Desconto na tarifa</span><span>Frete</span></div>
+  {visible.map(g=>g.familyId?<FamilyGroup key={g.key} group={g} results={results} open={opened.has(g.key)||!!search} toggle={()=>toggle(g.key)} {...rowProps}/>:<Row key={g.key} listing={g.items[0]} result={results[g.items[0].itemId]} {...rowProps}/>)}
+ </div>}
+ {!loading&&!busy&&!search?.message&&!visible.length&&<p>{filter||kind!=='all'?'Nenhum anúncio encontrado.':'Nenhum anúncio importado. Clique em Atualizar anúncios para carregar sua lista.'}</p>}
  </section>;
 }
