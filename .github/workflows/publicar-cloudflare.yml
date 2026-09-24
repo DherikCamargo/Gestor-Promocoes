@@ -38,6 +38,11 @@ jobs:
         with:
           node-version: 24
 
+      - name: Conferir chave de criptografia
+        env:
+          ML_ENCRYPTION_KEY: ${{ secrets.ML_ENCRYPTION_KEY }}
+        run: node scripts/check-encryption-key.mjs
+
       - name: Instalar dependências
         run: npx --yes pnpm@11.25.0 install --frozen-lockfile
 
