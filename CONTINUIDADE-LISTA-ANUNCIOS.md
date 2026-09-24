@@ -42,3 +42,19 @@ Não resolvido/limites:
 Validação: pnpm test 32/32 (8 novos em tests/listing-fees.test.mjs, dados simulados baseados na documentação). tests/support/ adiciona resolução de imports sem extensão só para os testes. ESLint sem problemas nos arquivos alterados; tsc sem erros em simple-catalog.tsx (erros antigos em promotion-check.tsx e rotas de promoções continuam). pnpm run build concluído. NÃO houve teste visual: no Windows, `pnpm dev` e `pnpm start` falham com "write EOF" do esbuild/wrangler antes de servir a página. Nenhuma consulta autenticada à conta ML. Adesões continuam bloqueadas.
 
 Conferência pedida após o deploy: abrir o gestor, clicar Atualizar anúncios (grava family_id) e comparar 2–3 anúncios com a Central de Vendas (um com promoção ativa, um sem, um de família com preço por variação): preço normal, promoção, tarifa, desconto na tarifa e frete.
+
+## Validação real e correção — 24/09/2026 (tarde)
+Conferência de Dherik, MLB3575190873 (versão publicada com a lista em linhas):
+- Gestor: normal R$ 199,90 · promoção R$ 109,00 "Queima de inverno Full" · tarifa R$ 15,26 (14%) · desconto "Sem desconto" · frete R$ 17,15.
+- Central: oferta ATIVA "Com redução de tarifas", R$ 109, recebe R$ 83,50, "Reduzimos R$ 6,91 das suas tarifas por cada venda".
+- Preço, promoção, tarifa e frete conferem: 109 − (15,26 − 6,91) − 17,15 = 83,50. Só a redução de R$ 6,91 faltava.
+
+Conferência baixada (conferencia-familia-MLB3575190873.json): sale_price.metadata.promotion_id = OFFER-MLB3575190873-13720667431 (promotion_type marketplace_campaign), que corresponde à oferta SMART P-MLB18027014 started, price 109, original_price 199,9, meli_percentage 3,5, seller_percentage 42, sem boosted_offer. Nenhum campo exportado traz R$ 6,91. Conversões testadas não reproduzem a Central: 3,5% × 199,90 = 7,00; 3,5/45,5 × 90,90 = 6,99. Dherik pediu explicitamente: exibir como o Mercado Livre exibe, sem cálculo próprio.
+
+Mudanças:
+- lib/listing-fees.ts: ActiveOffer identificado passa a ter feeDiscount:number|null e meliPercentage. Co-participação sem boosted_offer → feeDiscount null (não é mais "Sem desconto"). Tela mostra "ML cobre 3,5% · do desconto · valor em R$ na Central". Sem conversão para R$.
+- /promocoes/conferencia: novo activeOffer com a oferta ativa integral (itemSource), a linha do item em /seller-promotions/promotions/{id}/items?promotion_type={type}&item_id={MLB} (campaignSource) e o sale_price integral, via fullRecord (lib/promotion-evidence.ts: mantém todos os campos, descarta chaves token/secret/authorization/password/cookie, profundidade ≤ 6, listas ≤ 50). Objetivo: descobrir se a API envia a redução em R$ em algum campo fora da lista fixa.
+- Lista: SKUs longos resumidos ("A, B e mais N SKUs").
+- Testes: caso real acima, fullRecord (campos desconhecidos, credenciais, limites). pnpm test 36/36; build ok.
+
+Próximo passo (depende de dado real): após o deploy, baixar nova conferência de MLB3575190873 em /diagnostico e procurar em activeOffer o valor 6,91. Se existir campo com o valor em R$, exibir esse campo diretamente. Se não existir, manter a porcentagem e registrar que a API não fornece o valor da Central.
