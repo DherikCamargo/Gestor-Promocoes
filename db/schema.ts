@@ -4,3 +4,5 @@ export const mlOauthStates=sqliteTable("ml_oauth_states",{stateHash:text("state_
 export const mlImports=sqliteTable("ml_imports",{owner:text("owner").primaryKey(),sellerId:text("seller_id").notNull(),run:text("run").notNull(),payload:text("payload").notNull(),cursor:text("cursor"),processed:integer("processed").notNull(),total:integer("total").notNull(),done:integer("done").notNull(),lease:text("lease"),lockedUntil:integer("locked_until").notNull(),updatedAt:integer("updated_at").notNull()});
 // Custos editados na lista de anúncios; ausência de linha = custo padrão de lib/product-costs.ts.
 export const productCosts=sqliteTable("product_costs",{owner:text("owner").notNull(),product:text("product").notNull(),costCents:integer("cost_cents").notNull(),updatedAt:integer("updated_at").notNull()},t=>[primaryKey({columns:[t.owner,t.product]})]);
+// Regras de margem editadas na lista (JSON de MarginRules); ausência de linha = padrões de lib/offer-analysis.ts.
+export const marginRules=sqliteTable("margin_rules",{owner:text("owner").primaryKey(),rules:text("rules").notNull(),updatedAt:integer("updated_at").notNull()});

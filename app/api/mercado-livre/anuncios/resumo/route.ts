@@ -1,7 +1,8 @@
 import {actor,json} from '@/lib/mercado-livre';
 import {mlSession,MlError} from '@/lib/ml-api';
-import {listingPrices,listingFreight,record} from '@/lib/listing-summary';
-import {listingSaleFee,activeOffer,type ActiveOffer} from '@/lib/listing-fees';
+import {listingPrices,record} from '@/lib/listing-summary';
+import {activeOffer,type ActiveOffer} from '@/lib/listing-fees';
+import {quoteSaleFee,quoteFreight} from '@/lib/ml-quotes';
 import {familyKey} from '@/lib/ml-family';
 export async function GET(request:Request){
  let owner:string;try{owner=await actor()}catch{return json({error:'Abra o gestor em uma nova aba e entre na sua conta.'},403)}
@@ -15,12 +16,8 @@ export async function GET(request:Request){
   const listingType=typeof item.listing_type_id==='string'?item.listing_type_id:'';
   // Leituras independentes; falha em uma não esconde as demais, e nenhuma vira zero.
   const [freight,saleFee,promotion]=await Promise.all([
-   current!==null&&shipping.mode==='me2'&&typeof shipping.free_shipping==='boolean'
-    ?api.get<unknown>('/users/'+api.sellerId+'/shipping_options/free?'+new URLSearchParams({item_id:id,item_price:String(current),free_shipping:String(shipping.free_shipping),verbose:'true'})).then(raw=>listingFreight(raw,prices.currency),()=>null)
-    :null,
-   current!==null&&listingType&&typeof item.category_id==='string'
-    ?api.get<unknown>('/sites/MLB/listing_prices?'+new URLSearchParams({price:String(current),currency_id:prices.currency,category_id:item.category_id,listing_type_id:listingType,...(typeof shipping.logistic_type==='string'?{logistic_type:shipping.logistic_type}:{}),...(typeof shipping.mode==='string'?{shipping_mode:shipping.mode}:{})})).then(raw=>listingSaleFee(raw,listingType,prices.currency),()=>null)
-    :null,
+   current!==null?quoteFreight(api,item,current,prices.currency):null,
+   current!==null?quoteSaleFee(api,item,current,prices.currency):null,
    prices.promotionPrice!==null
     ?api.get<unknown>('/seller-promotions/items/'+id+'?app_version=v2').then(raw=>activeOffer(raw,record(record(sale).metadata).promotion_id,prices.promotionPrice!),():ActiveOffer=>({status:'unconfirmed',reason:'Não foi possível consultar as promoções do anúncio.'}))
     :null,
