@@ -5,12 +5,14 @@ import {Input} from '@/components/ui/input';
 import type {CatalogRow} from '@/lib/ml-catalog';
 import type {SaleFee,ActiveOffer} from '@/lib/listing-fees';
 import {listingSearch} from '@/lib/listing-search';
+import {listingCost,defaultProducts,type ListingCost} from '@/lib/product-costs';
 type Snapshot={run:string;rows:CatalogRow[];done:boolean};
 type Summary={itemId:string;title:string;listingType:string;familyId:string|null;currency:string;regularPrice:number|null;promotionPrice:number|null;currentPrice:number|null;variationPrices:boolean;freight:number|null;freeShipping:boolean|null;saleFee:SaleFee|null;promotion:ActiveOffer|null};
 type Result={data?:Summary;error?:string};
-type Listing={itemId:string;title:string;sku:string;variation:string;familyId:string|null};
+type Listing={itemId:string;title:string;sku:string;variation:string;familyId:string|null;rows:CatalogRow[]};
 type Group={key:string;familyId:string|null;title:string;items:Listing[]};
-type Filter='all'|'promotion'|'variation'|'failed';
+type Filter='all'|'promotion'|'variation'|'failed'|'nocost';
+type SaveCost=(key:string,cost:number|null)=>Promise<string|null>;
 const money=(n:number,currency:string)=>new Intl.NumberFormat('pt-BR',{style:'currency',currency}).format(n);
 const shortList=(skus:string[])=>skus.length>3?skus.slice(0,2).join(', ')+' e mais '+(skus.length-2)+' SKUs':skus.join(', ');
 const typeName=(t:string)=>t==='gold_special'?'Clássico':t==='gold_pro'?'Premium':t;
@@ -22,7 +24,7 @@ const Cell=({label,children}:{label:string;children:ReactNode})=><div className=
 function groupRows(rows:CatalogRow[]):Group[]{
  const byItem=new Map<string,CatalogRow[]>();
  for(const r of rows)byItem.set(r.itemId,[...(byItem.get(r.itemId)??[]),r]);
- const listings:Listing[]=[...byItem.values()].map(list=>({itemId:list[0].itemId,title:list[0].title,familyId:list[0].familyId??null,sku:shortList([...new Set(list.map(r=>r.sku).filter(Boolean))]),variation:list.length>1?list.length+' opções':list[0].variation}));
+ const listings:Listing[]=[...byItem.values()].map(list=>({itemId:list[0].itemId,title:list[0].title,familyId:list[0].familyId??null,sku:shortList([...new Set(list.map(r=>r.sku).filter(Boolean))]),variation:list.length>1?list.length+' opções':list[0].variation,rows:list}));
  const families=new Map<string,Listing[]>();
  for(const l of listings)if(l.familyId)families.set(l.familyId,[...(families.get(l.familyId)??[]),l]);
  const seen=new Set<string>(),groups:Group[]=[];
@@ -44,6 +46,29 @@ function Subsidy({offer:p,money:m}:{offer:ActiveOffer|null;money:(n:number)=>str
  return boost?<>{m(p.feeDiscount)}<Note>desconto na tarifa</Note></>:<Muted>Sem subsídio</Muted>;
 }
 
+// Custo do produto, editável na própria linha; o valor salvo vale para todos os anúncios do produto.
+function CostCell({cost,save}:{cost?:ListingCost;save:SaveCost}){
+ const [editing,setEditing]=useState(false),[value,setValue]=useState(''),[error,setError]=useState(''),[saving,setSaving]=useState(false);
+ const brl=(n:number)=>money(n,'BRL');
+ if(!cost)return <Cell label="Custo"><Muted>—</Muted></Cell>;
+ if(cost.state==='mixed')return <Cell label="Custo"><Muted>Varia por opção</Muted></Cell>;
+ const key=cost.editKey,product=key?defaultProducts[key]:undefined;
+ async function submit(next:number|null){
+  setSaving(true);const failure=await save(key!,next);setSaving(false);
+  if(failure)setError(failure);else{setEditing(false);setError('')}
+ }
+ if(editing&&key)return <Cell label="Custo"><form className="gp-cost-form" onSubmit={e=>{e.preventDefault();const n=Number(value.trim().replace(',','.'));if(!value.trim()||!Number.isFinite(n)||n<0||Math.abs(n*100-Math.round(n*100))>1e-6){setError('Informe um valor como 42 ou 42,50.');return}void submit(n)}}>
+  <Input aria-label="Novo custo em reais" inputMode="decimal" value={value} autoFocus onChange={e=>{setValue(e.target.value);setError('')}}/>
+  <span className="gp-cost-actions"><Button size="sm" type="submit" disabled={saving}>{saving?'Salvando…':'Salvar'}</Button><Button size="sm" variant="ghost" type="button" onClick={()=>{setEditing(false);setError('')}}>Cancelar</Button></span>
+  {error&&<span className="gp-note gp-danger" role="alert">{error}</span>}
+  <Note>{product?'Vale para todos os anúncios de '+product.name+'.':'Vale para todos os anúncios com este SKU.'}</Note>
+  {cost.state==='ok'&&cost.edited&&product&&<Button size="sm" variant="ghost" type="button" disabled={saving} onClick={()=>void submit(null)}>Voltar ao padrão ({brl(product.cost)})</Button>}
+ </form></Cell>;
+ const edit=key&&<Button size="sm" variant="ghost" type="button" className="gp-cost-edit" onClick={()=>{setValue(cost.state==='ok'?String(cost.cost).replace('.',','):'');setEditing(true)}}>{cost.state==='ok'?'Editar':'Informar custo'}</Button>;
+ if(cost.state==='missing')return <Cell label="Custo"><span className="gp-danger">Sem custo</span><Note>{cost.reason}</Note>{edit}</Cell>;
+ return <Cell label="Custo">{brl(cost.cost)}<Note>{cost.label}{cost.edited?' · editado':''}</Note>{edit||<Note>Edite o custo da peça para alterar o kit.</Note>}</Cell>;
+}
+
 function Values({result,retry}:{result?:Result;retry:()=>void}){
  if(result?.error)return <div className="gp-error" role="alert"><span>{result.error}</span><Button variant="outline" size="sm" onClick={retry}>Tentar de novo</Button></div>;
  const d=result?.data;
@@ -58,7 +83,7 @@ function Values({result,retry}:{result?:Result;retry:()=>void}){
  </>;
 }
 
-function Row({listing,result,request,retry,paused,child}:{listing:Listing;result?:Result;request:(id:string)=>void;retry:(id:string)=>void;paused:boolean;child?:boolean}){
+function Row({listing,result,request,retry,paused,child,costs,save}:{listing:Listing;result?:Result;request:(id:string)=>void;retry:(id:string)=>void;paused:boolean;child?:boolean;costs:Record<string,ListingCost>;save:SaveCost}){
  const element=useRef<HTMLDivElement|null>(null);
  // Consulta só quando a linha se aproxima da área visível; nada é carregado em massa ao abrir.
  useEffect(()=>{
@@ -72,10 +97,11 @@ function Row({listing,result,request,retry,paused,child}:{listing:Listing;result
  return <div className={'gp-row'+(child?' gp-child':'')} ref={element}>
   <div className="gp-title"><strong>{child?listing.variation||listing.title:d?.title??listing.title}</strong><span className="gp-note">{[listing.itemId,d&&typeName(d.listingType),listing.sku].filter(Boolean).join(' · ')}</span></div>
   <Values result={result} retry={()=>retry(listing.itemId)}/>
+  <CostCell cost={costs[listing.itemId]} save={save}/>
  </div>;
 }
 
-function FamilyGroup({group,results,open,toggle,...rowProps}:{group:Group;results:Record<string,Result>;open:boolean;toggle:()=>void;request:(id:string)=>void;retry:(id:string)=>void;paused:boolean}){
+function FamilyGroup({group,results,open,toggle,familyCost,...rowProps}:{group:Group;results:Record<string,Result>;open:boolean;toggle:()=>void;familyCost:ListingCost;request:(id:string)=>void;retry:(id:string)=>void;paused:boolean;costs:Record<string,ListingCost>;save:SaveCost}){
  const loaded=group.items.map(i=>results[i.itemId]?.data).filter((d):d is Summary=>!!d);
  const range=(values:(number|null)[])=>{const v=values.filter((n):n is number=>n!==null);if(!v.length||!loaded.length)return <Muted>Por opção</Muted>;const lo=Math.min(...v),hi=Math.max(...v),c=loaded[0].currency;return lo===hi?money(lo,c):money(lo,c)+' – '+money(hi,c)};
  return <>
@@ -83,6 +109,7 @@ function FamilyGroup({group,results,open,toggle,...rowProps}:{group:Group;result
    <div className="gp-title"><button type="button" className="gp-toggle" aria-expanded={open} onClick={toggle}><span aria-hidden="true">{open?'▾':'▸'}</span> <strong>{group.title}</strong></button><span><span className="gp-badge">Preço por variação</span> <span className="gp-note">Família {group.familyId} · {group.items.length} anúncios</span></span></div>
    {loaded.length?<><Cell label="Preço normal">{range(loaded.map(d=>d.regularPrice))}</Cell><Cell label="Na promoção">{range(loaded.map(d=>d.promotionPrice))}</Cell><Cell label="Tarifa ML"><Muted>Por opção</Muted></Cell><Cell label="Subsídio por conta do Mercado Livre"><Muted>Por opção</Muted></Cell><Cell label="Frete"><Muted>Por opção</Muted></Cell></>
     :<div className="gp-error gp-muted">Abra para consultar cada opção.</div>}
+   <CostCell cost={familyCost} save={rowProps.save}/>
   </div>
   {open&&group.items.map(l=><Row key={l.itemId} listing={l} result={results[l.itemId]} child {...rowProps}/>)}
  </>;
@@ -92,8 +119,14 @@ export default function SimpleCatalog(){
  const [snapshot,setSnapshot]=useState<Snapshot|null>(null),[query,setQuery]=useState(''),[filter,setFilter]=useState(''),[kind,setKind]=useState<Filter>('all');
  const [busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[message,setMessage]=useState('');
  const [results,setResults]=useState<Record<string,Result>>({}),[opened,setOpened]=useState<Set<string>>(new Set());
+ const [overrides,setOverrides]=useState<Record<string,number>>({}),[costNotice,setCostNotice]=useState('');
  const alive=useRef(true),lock=useRef(false),queue=useRef<Promise<unknown>>(Promise.resolve()),requested=useRef(new Set<string>()),generation=useRef(0);
  useEffect(()=>{alive.current=true;fetch('/api/mercado-livre/anuncios',{cache:'no-store'}).then(async r=>{const d=await r.json() as Snapshot&{error?:string}|null;if(!r.ok)throw Error(d?.error||'Não foi possível carregar os anúncios.');if(alive.current)setSnapshot(d)}).catch(e=>{if(alive.current)setMessage(e instanceof Error?e.message:'Não foi possível carregar os anúncios.')}).finally(()=>{if(alive.current)setLoading(false)});return()=>{alive.current=false}},[]);
+ useEffect(()=>{fetch('/api/mercado-livre/custos',{cache:'no-store'}).then(async r=>{const d=await r.json() as {overrides?:Record<string,number>;error?:string};if(!r.ok)throw Error(d.error||'Custos editados indisponíveis. Mostrando custos padrão.');if(alive.current)setOverrides(d.overrides??{})}).catch(e=>{if(alive.current)setCostNotice(e instanceof Error?e.message:'Custos editados indisponíveis. Mostrando custos padrão.')})},[]);
+ const save=useCallback<SaveCost>(async(key,cost)=>{
+  try{const r=await fetch('/api/mercado-livre/custos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key,cost})});const d=await r.json() as {overrides?:Record<string,number>;error?:string};if(!r.ok||!d.overrides)return d.error||'Não foi possível salvar o custo.';if(alive.current){setOverrides(d.overrides);setCostNotice('')}return null}
+  catch{return 'Não foi possível salvar o custo. Verifique a conexão.'}
+ },[]);
  // Fila sequencial: uma consulta por vez evita renovações de token concorrentes.
  const request=useCallback((id:string)=>{
   if(busy||requested.current.has(id))return;
@@ -108,17 +141,20 @@ export default function SimpleCatalog(){
  },[busy]);
  const retry=useCallback((id:string)=>{requested.current.delete(id);setResults(s=>{const next={...s};delete next[id];return next})},[]);
  const groups=useMemo(()=>groupRows(snapshot?.rows??[]),[snapshot]);
+ const costs=useMemo(()=>Object.fromEntries(groups.flatMap(g=>g.items).map(i=>[i.itemId,listingCost(i.rows,overrides)])),[groups,overrides]);
+ const familyCosts=useMemo(()=>Object.fromEntries(groups.filter(g=>g.familyId).map(g=>[g.key,listingCost(g.items.flatMap(i=>i.rows),overrides)])),[groups,overrides]);
  const search=useMemo(()=>filter.trim()?listingSearch(filter,snapshot?.rows??[]):null,[filter,snapshot]);
  const visible=useMemo(()=>{
   const ids=search?new Set(search.entries.map(e=>e.itemId)):null,known=new Set(groups.flatMap(g=>g.items.map(i=>i.itemId)));
   // MLB completo fora do catálogo importado continua consultável diretamente.
-  const direct:Group[]=(search?.entries??[]).filter(e=>!known.has(e.itemId)).map(e=>({key:e.itemId,familyId:null,title:e.title,items:[{itemId:e.itemId,title:e.title,sku:'',variation:'',familyId:null}]}));
+  const direct:Group[]=(search?.entries??[]).filter(e=>!known.has(e.itemId)).map(e=>({key:e.itemId,familyId:null,title:e.title,items:[{itemId:e.itemId,title:e.title,sku:'',variation:'',familyId:null,rows:[]}]}));
   return [...direct,...groups.filter(g=>!ids||g.items.some(i=>ids.has(i.itemId)))].filter(g=>kind==='all'
    ||kind==='variation'&&g.familyId!==null
    ||kind==='promotion'&&g.items.some(i=>results[i.itemId]?.data?.promotionPrice!=null)
-   ||kind==='failed'&&g.items.some(i=>results[i.itemId]?.error));
- },[groups,search,kind,results]);
- const counts={all:groups.reduce((n,g)=>n+g.items.length,0),promotion:Object.values(results).filter(r=>r.data?.promotionPrice!=null).length,variation:groups.filter(g=>g.familyId).length,failed:Object.values(results).filter(r=>r.error).length};
+   ||kind==='failed'&&g.items.some(i=>results[i.itemId]?.error)
+   ||kind==='nocost'&&g.items.some(i=>costs[i.itemId]?.state==='missing'));
+ },[groups,search,kind,results,costs]);
+ const counts={all:groups.reduce((n,g)=>n+g.items.length,0),promotion:Object.values(results).filter(r=>r.data?.promotionPrice!=null).length,variation:groups.filter(g=>g.familyId).length,failed:Object.values(results).filter(r=>r.error).length,nocost:Object.values(costs).filter(c=>c.state==='missing').length};
  async function sync(){
   if(lock.current)return;lock.current=true;setBusy(true);setMessage('Atualizando anúncios…');let current=snapshot;
   try{let action='start';do{const r=await fetch('/api/mercado-livre/anuncios',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,run:current?.run})});const d=await r.json() as Snapshot&{error?:string};if(!r.ok)throw Error(d.error||'Não foi possível atualizar.');current=d;action='next';if(alive.current)setSnapshot(d);}while(current&&!current.done&&alive.current);
@@ -127,20 +163,21 @@ export default function SimpleCatalog(){
   finally{if(alive.current)setBusy(false);lock.current=false;}
  }
  const toggle=(key:string)=>setOpened(s=>{const next=new Set(s);if(!next.delete(key))next.add(key);return next});
- const rowProps={request,retry,paused:busy};
- const filters:[Filter,string][]=[['all','Todos'],['promotion','Em promoção'],['variation','Preço por variação'],['failed','Com falha']];
+ const rowProps={request,retry,paused:busy,costs,save};
+ const filters:[Filter,string][]=[['all','Todos'],['promotion','Em promoção'],['variation','Preço por variação'],['failed','Com falha'],['nocost','Sem custo']];
  return <section className="panel simple-catalog"><div className="catalog-heading"><h1>Anúncios</h1><Button variant="outline" disabled={busy||loading} onClick={sync}>{busy?'Atualizando…':'Atualizar anúncios'}</Button></div>
- <div className="gp-metrics">{filters.map(([k,label])=><button key={k} type="button" className="gp-metric" aria-pressed={kind===k} onClick={()=>setKind(k)}><span>{label}</span><strong className={k==='failed'&&counts.failed?'gp-danger':''}>{counts[k]}</strong></button>)}</div>
+ <div className="gp-metrics">{filters.map(([k,label])=><button key={k} type="button" className="gp-metric" aria-pressed={kind===k} onClick={()=>setKind(k)}><span>{label}</span><strong className={(k==='failed'||k==='nocost')&&counts[k]?'gp-danger':''}>{counts[k]}</strong></button>)}</div>
  <p className="gp-note">Em promoção e Com falha contam apenas os anúncios já consultados; a consulta acontece conforme você rola a lista.</p>
  <form className="simple-search" onSubmit={e=>{e.preventDefault();setFilter(query.trim());setMessage('')}}><label htmlFor="listing-search">Filtrar por anúncio, MLB ou SKU<Input id="listing-search" placeholder="Todos os anúncios · digite para filtrar" value={query} onChange={e=>{setQuery(e.target.value);if(!e.target.value.trim()){setFilter('');setMessage('')}}}/></label><Button type="submit">Buscar</Button>{filter&&<Button variant="outline" onClick={()=>{setQuery('');setFilter('');setMessage('')}} type="button">Ver todos</Button>}</form>
  {message&&<p role="status">{message}</p>}
+ {costNotice&&<p role="status" className="gp-danger">{costNotice}</p>}
  {search?.message&&<p role="status">{search.message}</p>}
  {loading&&<p role="status">Carregando anúncios…</p>}
  {!loading&&!snapshot?.done&&snapshot&&<p className="small">Importação parcial. Atualize os anúncios para completar a lista.</p>}
  {!loading&&!busy&&snapshot&&snapshot.rows.length>0&&!snapshot.rows.some(r=>'familyId' in r)&&<p className="gp-note">Para agrupar anúncios com preço por variação, clique em Atualizar anúncios uma vez: importações anteriores não guardaram a família.</p>}
  {visible.length>0&&<div className="gp-table">
-  <div className="gp-row gp-head" aria-hidden="true"><span>Anúncio</span><span>Preço normal</span><span>Na promoção</span><span>Tarifa ML</span><span>Subsídio do Mercado Livre</span><span>Frete</span></div>
-  {visible.map(g=>g.familyId?<FamilyGroup key={g.key} group={g} results={results} open={opened.has(g.key)||!!search} toggle={()=>toggle(g.key)} {...rowProps}/>:<Row key={g.key} listing={g.items[0]} result={results[g.items[0].itemId]} {...rowProps}/>)}
+  <div className="gp-row gp-head" aria-hidden="true"><span>Anúncio</span><span>Preço normal</span><span>Na promoção</span><span>Tarifa ML</span><span>Subsídio do Mercado Livre</span><span>Frete</span><span>Custo</span></div>
+  {visible.map(g=>g.familyId?<FamilyGroup key={g.key} group={g} results={results} open={opened.has(g.key)||!!search} toggle={()=>toggle(g.key)} familyCost={familyCosts[g.key]} {...rowProps}/>:<Row key={g.key} listing={g.items[0]} result={results[g.items[0].itemId]} {...rowProps}/>)}
  </div>}
  {!loading&&!busy&&!search?.message&&!visible.length&&<p>{filter||kind!=='all'?'Nenhum anúncio encontrado.':'Nenhum anúncio importado. Clique em Atualizar anúncios para carregar sua lista.'}</p>}
  </section>;
