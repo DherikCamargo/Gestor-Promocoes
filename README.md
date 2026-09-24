@@ -34,3 +34,6 @@ A publicação atual permanece em https://gestor-promocoes-dherik.dherikjcamargo
 Não usar GitHub Pages para este aplicativo: ele requer backend, autenticação e banco.
 
 O pacote contém o código rastreado da versão 32 e documentos de colaboração. Não contém histórico Git, dependências instaladas, tokens, banco de produção ou sessões de usuários.
+
+## Publicação própria (em migração)
+Decisão de 24/09/2026: publicar pela Cloudflare do proprietário via GitHub Actions, sem depender do ChatGPT. Guia completo em PUBLICACAO-CLOUDFLARE.md. Até a configuração ser concluída, o site acima continua sendo o publicado.

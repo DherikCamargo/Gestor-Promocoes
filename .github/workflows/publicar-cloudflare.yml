@@ -1,0 +1,74 @@
+# Publica o gestor na conta Cloudflare do proprietário a cada merge na main (ou manualmente).
+# Só roda depois de configurado: sem a variável CF_D1_DATABASE_ID o job é pulado.
+# Guia de configuração: PUBLICACAO-CLOUDFLARE.md.
+name: Publicar na Cloudflare
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: publicar-cloudflare
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publicar:
+    if: vars.CF_D1_DATABASE_ID != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      CF_WORKER_NAME: ${{ vars.CF_WORKER_NAME }}
+      CF_D1_DATABASE_ID: ${{ vars.CF_D1_DATABASE_ID }}
+      CF_D1_DATABASE_NAME: ${{ vars.CF_D1_DATABASE_NAME }}
+      PUBLIC_ORIGIN: ${{ vars.PUBLIC_ORIGIN }}
+      CF_ACCESS_TEAM_DOMAIN: ${{ vars.CF_ACCESS_TEAM_DOMAIN }}
+      CF_ACCESS_AUD: ${{ vars.CF_ACCESS_AUD }}
+      ML_CLIENT_ID: ${{ vars.ML_CLIENT_ID }}
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Instalar dependências
+        run: npx --yes pnpm@11.25.0 install --frozen-lockfile
+
+      - name: Testes
+        run: npx pnpm@11.25.0 test
+
+      - name: Build
+        run: npx pnpm@11.25.0 run build
+
+      - name: Aplicar migrações do banco (D1)
+        run: |
+          cat > wrangler.migrations.json <<JSON
+          {"name":"$CF_WORKER_NAME","d1_databases":[{"binding":"DB","database_name":"$CF_D1_DATABASE_NAME","database_id":"$CF_D1_DATABASE_ID","migrations_dir":"drizzle"}]}
+          JSON
+          npx wrangler d1 migrations apply "$CF_D1_DATABASE_NAME" --remote --config wrangler.migrations.json
+
+      - name: Publicar Worker
+        run: npx wrangler deploy --config dist/server/wrangler.json
+
+      - name: Chave de criptografia (segredo)
+        env:
+          ML_ENCRYPTION_KEY: ${{ secrets.ML_ENCRYPTION_KEY }}
+        run: |
+          test -n "$ML_ENCRYPTION_KEY" || { echo "Segredo ML_ENCRYPTION_KEY não configurado no GitHub."; exit 1; }
+          umask 077
+          node -e 'require("fs").writeFileSync("secrets.json",JSON.stringify({ML_ENCRYPTION_KEY:process.env.ML_ENCRYPTION_KEY}))'
+          npx wrangler secret bulk secrets.json --config dist/server/wrangler.json
+          rm -f secrets.json
+
+      - name: Conferir publicação
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" "$PUBLIC_ORIGIN/api/mercado-livre/regras")
+          echo "Rota /api/mercado-livre/regras respondeu HTTP $code (302/403 = protegida pelo Access, 404 = não publicada)."
+          test "$code" != "404" && test "$code" != "000"

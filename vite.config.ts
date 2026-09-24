@@ -13,15 +13,39 @@ const { d1, r2 } = hostingConfig;
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
 const managedLinux = readExecutionProfile() === "managed-linux";
 
+// Hospedagem própria na Cloudflare (GitHub Actions): definida só quando CF_D1_DATABASE_ID existe.
+// Sem essas variáveis o build fica igual ao do ChatGPT Sites.
+const ownDatabaseId = process.env.CF_D1_DATABASE_ID;
+const ownVars = ["CF_WORKER_NAME", "CF_D1_DATABASE_NAME", "PUBLIC_ORIGIN", "CF_ACCESS_TEAM_DOMAIN", "CF_ACCESS_AUD", "ML_CLIENT_ID"] as const;
+if (ownDatabaseId) {
+  const missing = ownVars.filter((name) => !process.env[name]);
+  if (missing.length) throw new Error("Hospedagem própria sem configuração: " + missing.join(", "));
+}
+// Validado acima: com CF_D1_DATABASE_ID definido, todas as variáveis existem.
+const own = (name: (typeof ownVars)[number]) => process.env[name] as string;
+const ownHosting = ownDatabaseId
+  ? {
+      name: own("CF_WORKER_NAME"),
+      vars: {
+        AUTH_MODE: "cloudflare-access",
+        PUBLIC_ORIGIN: own("PUBLIC_ORIGIN"),
+        CF_ACCESS_TEAM_DOMAIN: own("CF_ACCESS_TEAM_DOMAIN"),
+        CF_ACCESS_AUD: own("CF_ACCESS_AUD"),
+        ML_CLIENT_ID: own("ML_CLIENT_ID"),
+      },
+    }
+  : {};
+
 const localBindingConfig = {
   main: "vinext/server/fetch-handler",
   compatibility_flags: ["nodejs_compat"],
+  ...ownHosting,
   d1_databases: d1
     ? [
         {
           binding: d1,
-          database_name: "site-creator-d1",
-          database_id: SITE_CREATOR_PLACEHOLDER_DATABASE_ID,
+          database_name: ownDatabaseId ? own("CF_D1_DATABASE_NAME") : "site-creator-d1",
+          database_id: ownDatabaseId ?? SITE_CREATOR_PLACEHOLDER_DATABASE_ID,
         },
       ]
     : [],
