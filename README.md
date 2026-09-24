@@ -30,10 +30,7 @@ Adesões a promoções estão bloqueadas no servidor após divergências de pre�
 
 ## GitHub e publicação
 Repositório compartilhado: https://github.com/DherikCamargo/Gestor-Promocoes. Base importada: código da versão 32 publicada. Consulte CONTRIBUTING.md para trabalhar em branches e pull requests.
-A publicação atual permanece em https://gestor-promocoes-dherik.dherikjcamargo.chatgpt.site . A automação Publicar Gestor de Promoções foi ativada em 22/09/2026: incorporar um pull request à main aciona sincronização, build e publicação no Site. Commits diretos na main não acionam o gatilho. O build precisa passar e a publicação pode falhar; confira o resultado informado pela automação. Veja AUTOMACAO-PUBLICACAO.md.
+Publicação oficial desde 24/09/2026: https://gestor-promocoes.dherikjgk.workers.dev (Cloudflare do proprietário, login pelo Cloudflare Access). Cada merge de pull request na main roda testes, build, migrações do D1 e publicação pelo GitHub Actions (.github/workflows/publicar-cloudflare.yml); o resultado fica em GitHub → Actions. Falha em qualquer passo mantém a versão anterior. O site antigo (https://gestor-promocoes-dherik.dherikjcamargo.chatgpt.site) e a automação no ChatGPT não são mais usados. Guia em PUBLICACAO-CLOUDFLARE.md.
 Não usar GitHub Pages para este aplicativo: ele requer backend, autenticação e banco.
 
 O pacote contém o código rastreado da versão 32 e documentos de colaboração. Não contém histórico Git, dependências instaladas, tokens, banco de produção ou sessões de usuários.
-
-## Publicação própria (em migração)
-Decisão de 24/09/2026: publicar pela Cloudflare do proprietário via GitHub Actions, sem depender do ChatGPT. Guia completo em PUBLICACAO-CLOUDFLARE.md. Até a configuração ser concluída, o site acima continua sendo o publicado.

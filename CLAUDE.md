@@ -10,7 +10,7 @@ Leia README.md e Continuidade-Gestor-Promocoes-v32.md antes de trabalhar. Este �
 - Não invente preço, frete, redução de comissão ou respostas da API. Erros e dados ausentes devem permanecer explícitos.
 - Regras financeiras e limitações constam no documento de continuidade; não presumir que toda a lógica atual esteja correta.
 - Trabalhe em branch separada quando o Git compartilhado estiver configurado; preserve alterações de outras pessoas/IAs.
-- Não publique nem modifique a conta do Mercado Livre apenas por concluir uma edição local. Publicação: em migração do ChatGPT Sites para a Cloudflare própria do proprietário (decisão de 24/09/2026); ver PUBLICACAO-CLOUDFLARE.md. O código funciona nos dois: sem variáveis de hospedagem, fluxo Sites; com AUTH_MODE=cloudflare-access, login só pelo JWT do Access.
+- Não publique nem modifique a conta do Mercado Livre apenas por concluir uma edição local. Publicação oficial desde 24/09/2026: Cloudflare do proprietário, https://gestor-promocoes.dherikjgk.workers.dev, pelo GitHub Actions a cada merge na main (ver PUBLICACAO-CLOUDFLARE.md). Login só pelo Cloudflare Access (JWT verificado). O site do ChatGPT Sites não é mais atualizado. Nunca enviar direto à main: só merges de PR publicam.
 - Após cada alteração, entregue resumo do que mudou, testes executados, limitações e documento de continuidade atualizado.
 - Informe claramente a diferença entre testes simulados e consultas reais. Não declarar compatibilidade total com a Central antes da validação.
 

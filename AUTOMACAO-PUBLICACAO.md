@@ -1,4 +1,6 @@
-# Continuidade — publicação automática
+# Continuidade — publicação automática (OBSOLETO)
+
+**Substituído em 24/09/2026** pela publicação própria na Cloudflare via GitHub Actions (PUBLICACAO-CLOUDFLARE.md), por causa do limite de uso do ChatGPT. A tarefa "Publicar Gestor de Promoções" no ChatGPT deve ser desativada pelo proprietário. O conteúdo abaixo é histórico.
 Atualizado em 22/09/2026.
 
 ## Configuração confirmada
