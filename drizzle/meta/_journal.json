@@ -15,6 +15,13 @@
       "when": 1789669793334,
       "tag": "0001_military_whizzer",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790261590262,
+      "tag": "0002_nifty_professor_monster",
+      "breakpoints": true
     }
   ]
 }
