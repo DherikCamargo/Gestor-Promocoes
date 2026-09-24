@@ -58,3 +58,13 @@ Mudanças:
 - Testes: caso real acima, fullRecord (campos desconhecidos, credenciais, limites). pnpm test 36/36; build ok.
 
 Próximo passo (depende de dado real): após o deploy, baixar nova conferência de MLB3575190873 em /diagnostico e procurar em activeOffer o valor 6,91. Se existir campo com o valor em R$, exibir esse campo diretamente. Se não existir, manter a porcentagem e registrar que a API não fornece o valor da Central.
+
+## Subsídio do Mercado Livre — 24/09/2026 (decisão de Dherik)
+Nova conferência com activeOffer integral (MLB3575190873, 14:09Z): oferta ativa (seller-promotions/items), linha do item na campanha P-MLB18027014 (promotion_type=SMART) e sale_price completos. Nenhum campo traz valor em R$ do subsídio/redução de tarifa; só meli_percentage 3,5 e seller_percentage 42 (sale_price.metadata acrescenta campaign_id). Conclusão: a API de promoções não fornece o "Reduzimos R$ 6,91" da Central.
+Porcentagens são sobre o preço bruto (original_price): 3,5 + 42 = 45,5% ≈ desconto real 90,90/199,90 = 45,47% (arredondadas pela API; o mesmo vale para o exemplo oficial 8 + 16 + 11,1 = 35,1% de 5000).
+
+Decisão de Dherik: exibir "Subsídio por conta do Mercado Livre" = meli_percentage × original_price, sempre arredondado para baixo no centavo.
+- lib/listing-fees.ts: ActiveOffer identificado ganha mlSubsidy (Math.floor(meli × original + 1e-6)/100; 0 sem co-participação; null se faltar original_price). feeDiscount volta a ser número (discount_meli_boost_amount das ofertas boosted, 0 caso contrário) e aparece separado.
+- Tela: coluna "Subsídio do Mercado Livre"; valor + nota "3,5% do preço normal" (+ desconto automático na tarifa quando houver). Sem original_price: "ML cobre X% do preço normal".
+- Caso real: R$ 6,99 no gestor × R$ 6,91 na Central (diferença pelo arredondamento da porcentagem na API). Documentado; não corrigir com fórmula inventada.
+- Testes: 38/38 (caso real 6,99; arredondamento para baixo 7,91; proteção de ponto flutuante 0,57% × 100 = 0,57; sem original_price = null).
