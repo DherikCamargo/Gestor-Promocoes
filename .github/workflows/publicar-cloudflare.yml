@@ -57,10 +57,10 @@ jobs:
           cat > wrangler.migrations.json <<JSON
           {"name":"$CF_WORKER_NAME","d1_databases":[{"binding":"DB","database_name":"$CF_D1_DATABASE_NAME","database_id":"$CF_D1_DATABASE_ID","migrations_dir":"drizzle"}]}
           JSON
-          npx wrangler d1 migrations apply "$CF_D1_DATABASE_NAME" --remote --config wrangler.migrations.json
+          bash scripts/retry.sh npx wrangler d1 migrations apply "$CF_D1_DATABASE_NAME" --remote --config wrangler.migrations.json
 
       - name: Publicar Worker
-        run: npx wrangler deploy --config dist/server/wrangler.json
+        run: bash scripts/retry.sh npx wrangler deploy --config dist/server/wrangler.json
 
       - name: Chave de criptografia (segredo)
         env:
@@ -69,7 +69,7 @@ jobs:
           test -n "$ML_ENCRYPTION_KEY" || { echo "Segredo ML_ENCRYPTION_KEY não configurado no GitHub."; exit 1; }
           umask 077
           node -e 'require("fs").writeFileSync("secrets.json",JSON.stringify({ML_ENCRYPTION_KEY:process.env.ML_ENCRYPTION_KEY}))'
-          npx wrangler secret bulk secrets.json --config dist/server/wrangler.json
+          bash scripts/retry.sh npx wrangler secret bulk secrets.json --config dist/server/wrangler.json
           rm -f secrets.json
 
       - name: Conferir publicação

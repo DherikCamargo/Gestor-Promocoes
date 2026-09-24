@@ -27,7 +27,7 @@ Contas, senhas, tokens e a chave de criptografia são criados e colados pelo pro
 10. **No gestor novo**: *Conexão com o Mercado Livre → chave secreta do app → Autorizar*; depois *Atualizar anúncios*. Custos e regras editados no site antigo precisam ser informados de novo.
 
 ## Depois de configurado
-Cada merge na `main` roda testes, build, migrações do D1, publicação e a conferência final (a rota nova precisa existir). Falha em qualquer passo interrompe a publicação e mantém a versão anterior no ar. O resultado aparece em *GitHub → Actions*.
+Cada merge na `main` roda testes, build, migrações do D1, publicação e a conferência final (a rota nova precisa existir). Falha em qualquer passo interrompe a publicação e mantém a versão anterior no ar. Os passos que falam com a Cloudflare (migrações, publicação, segredo) tentam até 3 vezes (scripts/retry.sh), por causa de falhas momentâneas da API como "unknown error [code: 10013]" (ocorrida em 24/09/2026 no merge do PR #12). Se ainda falhar: GitHub → Actions → execução com ✗ → Re-run failed jobs. O resultado aparece em *GitHub → Actions*.
 
 ## Limites e riscos
 - **Plano gratuito de Workers**: limite de 10 ms de CPU por requisição. Se aparecerem erros 1102 / "exceeded CPU", o plano Workers Paid (US$ 5/mês) resolve.
