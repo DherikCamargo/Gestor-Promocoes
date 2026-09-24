@@ -6,7 +6,7 @@ import type {CatalogRow} from '@/lib/ml-catalog';
 import type {SaleFee,ActiveOffer} from '@/lib/listing-fees';
 import {listingSearch} from '@/lib/listing-search';
 import {listingCost,defaultProducts,type ListingCost} from '@/lib/product-costs';
-import {OfferPanel,RulesPanel} from './offer-panel';
+import {OfferPanel,RulesPanel,FamilyActivation} from './offer-panel';
 type Snapshot={run:string;rows:CatalogRow[];done:boolean};
 type Summary={itemId:string;title:string;listingType:string;familyId:string|null;currency:string;regularPrice:number|null;promotionPrice:number|null;currentPrice:number|null;variationPrices:boolean;freight:number|null;freeShipping:boolean|null;saleFee:SaleFee|null;promotion:ActiveOffer|null};
 type Result={data?:Summary;error?:string};
@@ -105,13 +105,16 @@ function Row({listing,result,request,retry,paused,child,costs,save,version}:{lis
 
 function FamilyGroup({group,results,open,toggle,familyCost,...rowProps}:{group:Group;results:Record<string,Result>;open:boolean;toggle:()=>void;familyCost:ListingCost;request:(id:string)=>void;retry:(id:string)=>void;paused:boolean;costs:Record<string,ListingCost>;save:SaveCost;version:number}){
  const loaded=group.items.map(i=>results[i.itemId]?.data).filter((d):d is Summary=>!!d);
+ const [activationOpen,setActivationOpen]=useState(false);
+ const familyItems=useMemo(()=>group.items.map(l=>({itemId:l.itemId,label:(l.variation||l.title)+' · '+l.itemId})),[group.items]);
  const range=(values:(number|null)[])=>{const v=values.filter((n):n is number=>n!==null);if(!v.length||!loaded.length)return <Muted>Por opção</Muted>;const lo=Math.min(...v),hi=Math.max(...v),c=loaded[0].currency;return lo===hi?money(lo,c):money(lo,c)+' – '+money(hi,c)};
  return <>
   <div className="gp-row gp-family">
-   <div className="gp-title"><button type="button" className="gp-toggle" aria-expanded={open} onClick={toggle}><span aria-hidden="true">{open?'▾':'▸'}</span> <strong>{group.title}</strong></button><span><span className="gp-badge">Preço por variação</span> <span className="gp-note">Família {group.familyId} · {group.items.length} anúncios</span></span></div>
+   <div className="gp-title"><button type="button" className="gp-toggle" aria-expanded={open} onClick={toggle}><span aria-hidden="true">{open?'▾':'▸'}</span> <strong>{group.title}</strong></button><span><span className="gp-badge">Preço por variação</span> <span className="gp-note">Família {group.familyId} · {group.items.length} anúncios</span></span><Button size="sm" variant="outline" type="button" className="gp-family-toggle" aria-expanded={activationOpen} onClick={()=>setActivationOpen(o=>!o)}>{activationOpen?'Ocultar promoções da família':'Promoções da família'}</Button></div>
    {loaded.length?<><Cell label="Preço normal">{range(loaded.map(d=>d.regularPrice))}</Cell><Cell label="Na promoção">{range(loaded.map(d=>d.promotionPrice))}</Cell><Cell label="Tarifa ML"><Muted>Por opção</Muted></Cell><Cell label="Subsídio por conta do Mercado Livre"><Muted>Por opção</Muted></Cell><Cell label="Frete"><Muted>Por opção</Muted></Cell></>
     :<div className="gp-error gp-muted">Abra para consultar cada opção.</div>}
    <CostCell cost={familyCost} save={rowProps.save}/>
+   {activationOpen&&<div className="gp-panel-wrap"><FamilyActivation items={familyItems} version={rowProps.version}/></div>}
   </div>
   {open&&group.items.map(l=><Row key={l.itemId} listing={l} result={results[l.itemId]} child {...rowProps}/>)}
  </>;
