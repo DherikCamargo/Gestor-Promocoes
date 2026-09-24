@@ -50,7 +50,7 @@ A página anterior foi preservada em /diagnostico (sem link na página principal
 - Divergências de propostas anteriores continuam NÃO resolvidas; histórico abaixo. Diagnóstico v31 permanece disponível em /diagnostico.
 - Implementação anterior ainda tem limite12 campanhas/50 itens e outras limitações documentadas. A simplificação não corrigiu cobertura de campanhas.
 - Sessão ML ainda pode sofrer corridas de refresh entre abas. Novo componente faz consultas sequenciais, mas não altera mecanismo global.
-- Para Claude Code: ZIP Gestor-Promocoes-v31-Claude.zip entregue anteriormente está DESATUALIZADO. Precisa sincronizar commit v32 ou gerar novo pacote antes de editar em paralelo. GitHub compartilhado ainda não configurado. Não presumir que o computador do usuário contém v32.
+- Atualização 24/09/2026: o GitHub compartilhado está configurado (https://github.com/DherikCamargo/Gestor-Promocoes; ver CONTINUIDADE-GITHUB.md). O ZIP Gestor-Promocoes-v31-Claude.zip está obsoleto; trabalhar a partir de um clone da main. Testes automatizados em tests/ (`pnpm test`): busca por família, promotionPrice/promotionPriceIssues e listingPrices/listingFreight. As verificações locais descritas nas linhas 44, 97 e 201 foram parcialmente convertidas em testes com dados simulados; não substituem validação autenticada.
 - Sempre gerar documento de continuidade ao concluir alteração, conforme pedido do usuário.
 
 ---
