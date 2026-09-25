@@ -1,15 +1,17 @@
 'use client';
 import {useEffect,useMemo,useState} from 'react';
 import {Button} from '@/components/ui/button';
-import {activate,outcomeText,outcomeTone,brl,pct,typeNames,type Outcome} from './offer-panel';
+import {activate,outcomeText,outcomeTone,brl,pct,typeNames,PriceChooser,type Outcome,type PriceChoice} from './offer-panel';
 import {groupCampaigns} from '@/lib/campaign-groups';
 type Campaign={id:string;type:string;status:string;name:string;start:string|null;finish:string|null;deadline:string|null};
 type CampaignItem={itemId:string;status:string;price:number|null};
 type Counts={items:CampaignItem[];complete:boolean}|{error:string};
 type Analysis={status:'approved'|'attention'|'not_recommended'|'missing';price:number;margin:number|null;profit:number|null;missing:string[]};
-type Row={itemId:string;label:string;refId:string|null;status:string;price:number|null;analysis?:Analysis;reason?:string;blockReason:string|null;error?:string;current?:{name:string|null;status:string;finish:string|null}|null};
+type Row={itemId:string;label:string;refId:string|null;key?:string|null;priceChoice?:PriceChoice|null;status:string;price:number|null;analysis?:Analysis;reason?:string;blockReason:string|null;error?:string;current?:{name:string|null;status:string;finish:string|null}|null};
 // Tipos que o gestor ativa (preço definido pelo Mercado Livre); os demais ficam para a Central.
 const activatable=new Set(['SMART','PRICE_MATCHING','MARKETPLACE_CAMPAIGN']);
+// Tipos em que o vendedor escolhe o preço, anúncio por anúncio (sem ativação em lote).
+const chooseType=new Set(['DEAL','PRICE_DISCOUNT']);
 const fmt=(s:string|null)=>s?new Date(s).toLocaleDateString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit'}):null;
 // Sem nome na API (ex.: relâmpago), o nome é o próprio tipo: mostra o tipo traduzido.
 const displayName=(c:Campaign)=>c.name===c.type?typeNames[c.type]??c.type:c.name;
@@ -46,8 +48,8 @@ export function CampaignCards({labels,version}:{labels:Record<string,string>;ver
  // Todos os cards numa grade única e compacta, na ordem das seções; a seção vira etiqueta no card.
  const card=(c:Campaign,group:string)=>{const v=counts[c.id],cand=v&&'items' in v?v.items.filter(i=>i.status==='candidate').length:null,part=v&&'items' in v?v.items.filter(i=>i.status!=='candidate').length:null;
   const dates=[fmt(c.start)&&`${fmt(c.start)}–${fmt(c.finish)??'?'}`,fmt(c.deadline)&&`aderir até ${fmt(c.deadline)}`].filter(Boolean).join(' · ');
-  return <button key={c.id} type="button" className="gp-campaign-card" aria-pressed={open===c.id} onClick={()=>setOpen(o=>o===c.id?null:c.id)} title={`${displayName(c)} · ${typeNames[c.type]??c.type}${activatable.has(c.type)?'':' · ativar pela Central'}`}>
-   <span className={'gp-campaign-tag'+(activatable.has(c.type)?' gp-campaign-tag-on':'')}>{group}</span>
+  return <button key={c.id} type="button" className="gp-campaign-card" aria-pressed={open===c.id} onClick={()=>setOpen(o=>o===c.id?null:c.id)} title={`${displayName(c)} · ${typeNames[c.type]??c.type}${activatable.has(c.type)?'':chooseType.has(c.type)?' · você escolhe o preço':' · ativar pela Central'}`}>
+   <span className={'gp-campaign-tag'+(activatable.has(c.type)||chooseType.has(c.type)?' gp-campaign-tag-on':'')}>{group}</span>
    <strong>{displayName(c)}</strong>
    <span className="gp-campaign-counts">{v===undefined?'contando…':'error' in v?v.error:<><b>{cand}</b> disp. · <b>{part}</b> part.{v.complete?'':' (parcial)'}</>}</span>
    {dates&&<span className="gp-note">{dates}</span>}
@@ -65,6 +67,7 @@ export function CampaignCards({labels,version}:{labels:Record<string,string>;ver
 // ativar todas as aptas ou só as selecionadas (mesma adesão revalidada no servidor).
 function CampaignDetail({campaign:c,counts,labels,enabled,onClose}:{campaign:Campaign;counts?:Counts;labels:Record<string,string>;enabled:boolean;onClose:()=>void}){
  const [rows,setRows]=useState<Record<string,Row>>({}),[done,setDone]=useState(0);
+ const [choosing,setChoosing]=useState<string|null>(null);
  const [selected,setSelected]=useState<Set<string>>(new Set()),[outcomes,setOutcomes]=useState<Record<string,Outcome>>({});
  const [confirming,setConfirming]=useState<'all'|'selected'|null>(null),[running,setRunning]=useState(false);
  const items=useMemo(()=>counts&&'items' in counts?counts.items:[],[counts]);
@@ -73,11 +76,11 @@ function CampaignDetail({campaign:c,counts,labels,enabled,onClose}:{campaign:Cam
  useEffect(()=>{
   let active=true;const queue=[...candidates];let n=0;
   const worker=async()=>{while(queue.length&&active){const it=queue.shift()!;let row:Row;
-   try{const r=await fetch('/api/mercado-livre/promocoes/analise?'+new URLSearchParams({itemId:it.itemId,promotionId:c.id}),{cache:'no-store'});const d=await r.json() as {offers?:{id:string|null;refId:string|null;status:string;price?:number;analysis?:Analysis;blockReason:string|null;reason?:string}[];currentPromotion?:{name:string|null;status:string;finish:string|null}|null;error?:string};
+   try{const r=await fetch('/api/mercado-livre/promocoes/analise?'+new URLSearchParams({itemId:it.itemId,promotionId:c.id}),{cache:'no-store'});const d=await r.json() as {offers?:{id:string|null;refId:string|null;status:string;price?:number;analysis?:Analysis;blockReason:string|null;reason?:string;key?:string|null;priceChoice?:PriceChoice|null}[];currentPromotion?:{name:string|null;status:string;finish:string|null}|null;error?:string};
     const o=d.offers?.find(x=>x.id===c.id&&x.status==='candidate');
     row=!r.ok?{itemId:it.itemId,label:labels[it.itemId]??it.itemId,refId:null,status:'candidate',price:it.price,blockReason:null,error:d.error||'Análise indisponível.'}
      :!o?{itemId:it.itemId,label:labels[it.itemId]??it.itemId,refId:null,status:'candidate',price:it.price,blockReason:'A oferta não aparece mais para este anúncio.'}
-     :{itemId:it.itemId,label:labels[it.itemId]??it.itemId,refId:o.refId??o.id,status:o.status,price:o.analysis?.price??o.price??it.price,analysis:o.analysis,reason:o.reason,current:d.currentPromotion,blockReason:o.blockReason??(o.analysis?null:o.reason??'Sem análise.')};
+     :{itemId:it.itemId,label:labels[it.itemId]??it.itemId,refId:o.refId??o.id,status:o.status,price:o.analysis?.price??o.price??it.price,analysis:o.analysis,reason:o.reason,key:o.key,priceChoice:o.priceChoice,current:d.currentPromotion,blockReason:o.blockReason??(o.analysis?null:o.reason??'Sem análise.')};
    }catch{row={itemId:it.itemId,label:labels[it.itemId]??it.itemId,refId:null,status:'candidate',price:it.price,blockReason:null,error:'Sem resposta.'}}
    if(!active)return;
    n++;setRows(s=>({...s,[it.itemId]:row}));setDone(n);
@@ -103,13 +106,16 @@ function CampaignDetail({campaign:c,counts,labels,enabled,onClose}:{campaign:Cam
   {!counts?<p className="gp-note" role="status">Carregando os anúncios desta promoção…</p>
    :'error' in counts?<p className="gp-note gp-danger">{counts.error}</p>:<>
    <p className="gp-note">{candidates.length} anúncio{candidates.length===1?'':'s'} disponíve{candidates.length===1?'l':'is'}{analyzing?` · analisando ${done} de ${candidates.length}…`:` · ${apt.length} apto${apt.length===1?'':'s'}`}{counts.complete?'':' · lista parcial (muitos anúncios)'}</p>
-   {!activatable.has(c.type)&&<p className="gp-note">Neste tipo você escolhe o preço ou a adesão é irreversível: a análise aparece, mas a ativação é pela Central por enquanto.</p>}
+   {chooseType.has(c.type)?<p className="gp-note">Nesta promoção você escolhe o preço: use “Escolher preço” em cada anúncio. A margem aparece no preço sugerido e é recalculada no preço que você digitar.</p>
+    :!activatable.has(c.type)&&<p className="gp-note">Oferta relâmpago e do dia não podem ser desfeitas: a análise aparece, mas a ativação é pela Central por enquanto.</p>}
    {list.length>0&&<ul className="gp-campaign-rows">{list.map(r=>{const o=outcomes[r.itemId],ok=!r.blockReason&&!r.error&&!!r.refId;return <li key={r.itemId}>
     <input type="checkbox" aria-label={'Selecionar '+r.label} checked={selected.has(r.itemId)&&!o} disabled={!ok||!!o||running||!enabled||!activatable.has(c.type)} onChange={()=>setSelected(s=>{const n=new Set(s);if(!n.delete(r.itemId))n.add(r.itemId);return n})}/>
     <span>{r.label}{r.current&&<span className="gp-note">Em promoção: {r.current.name}{r.current.status==='pending'?' (programada)':''}{fmt(r.current.finish)?` até ${fmt(r.current.finish)}`:''}</span>}</span>
     <span>{r.price!==null?brl(r.price):'—'}</span>
     <span>{r.analysis?.margin!=null?`margem ${pct(r.analysis.margin)}`:r.analysis?(r.analysis.status==='missing'?<span className="gp-note">Faltam dados: {r.analysis.missing.join(', ')}</span>:verdict[r.analysis.status]):r.reason?<span className="gp-note gp-danger">Sem margem: {r.reason}</span>:'—'}</span>
-    <span className={o?'gp-verdict '+outcomeTone(o):ok?'gp-verdict gp-ok':'gp-note'}>{o?outcomeText(o):r.error??r.blockReason??'Apta'}</span>
+    {enabled&&r.priceChoice&&r.key&&!r.error?<span><Button size="sm" variant="outline" type="button" aria-expanded={choosing===r.itemId} onClick={()=>setChoosing(x=>x===r.itemId?null:r.itemId)}>{choosing===r.itemId?'Fechar':'Escolher preço'}</Button></span>
+     :<span className={o?'gp-verdict '+outcomeTone(o):ok?'gp-verdict gp-ok':'gp-note'}>{o?outcomeText(o):r.error??r.blockReason??'Apta'}</span>}
+    {choosing===r.itemId&&r.priceChoice&&r.key&&<div className="gp-row-chooser"><PriceChooser itemId={r.itemId} offerKey={r.key} type={c.type} name={c.name} choice={r.priceChoice}/></div>}
    </li>})}</ul>}
    {enabled&&activatable.has(c.type)&&!analyzing&&(apt.length===0?<p className="gp-note">Nenhum anúncio apto para ativar nesta promoção.</p>
     :running?<p role="status">Ativando…</p>
