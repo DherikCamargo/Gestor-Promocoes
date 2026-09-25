@@ -98,3 +98,6 @@ Pedido de Dherik: aba com anúncios sem promoção, só no preço bruto.
 - /api/mercado-livre/anuncios/sem-promocao?ids= (até 20 MLBs, cinco consultas por vez, só leitura).
 - Lista com abas "Todos os anúncios" e "Sem promoção (N)": ao abrir a aba, consulta o sale_price de todos os anúncios em lotes de 20 e mostra os que vendem no preço normal (variações de família em linhas próprias), com a mesma linha da lista (preço, tarifa, frete, custo e botão Promoções). "Consultar de novo" refaz; anúncios sem preço informado são contados à parte.
 - Testes 83/83 (3 novos).
+
+## Card aberto acompanha regras e custos — 25/09/2026
+Pergunta de Dherik: mudar as regras de margem atualiza as promoções aptas? Sim: toda análise lê as regras e custos do banco na hora, e a adesão revalida no servidor. Faltava o card de promoção já aberto: agora CampaignCards recebe version (incrementada ao salvar regras ou custos) e o painel da promoção é refeito. "Atualizar anúncios" só reimporta a lista de anúncios; não é necessário para regras/custos.

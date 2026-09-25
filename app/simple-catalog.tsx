@@ -189,7 +189,7 @@ export default function SimpleCatalog(){
  const rowProps={request,retry,paused:busy,costs,save,version};
  return <section className="panel simple-catalog"><div className="catalog-heading"><h1>Anúncios</h1><Button variant="outline" disabled={busy||loading} onClick={sync}>{busy?'Atualizando…':'Atualizar anúncios'}</Button></div>
  <h2 className="gp-board-title">Promoções do Mercado Livre</h2>
- {boardItems.length>0&&<CampaignCards labels={labels}/>}
+ {boardItems.length>0&&<CampaignCards labels={labels} version={version}/>}
  <div className="gp-tabs" role="tablist">
   <button type="button" role="tab" aria-selected={tab==='all'} className="gp-tab" onClick={()=>openTab('all')}>Todos os anúncios</button>
   <button type="button" role="tab" aria-selected={tab==='regular'} className="gp-tab" onClick={()=>openTab('regular')}>Sem promoção{saleScan?` (${regularCount})`:''}</button>

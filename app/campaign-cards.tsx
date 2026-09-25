@@ -18,7 +18,8 @@ const displayName=(c:Campaign)=>c.name===c.type?typeNames[c.type]??c.type:c.name
 const verdict={approved:'Aprovada',attention:'Atenção',not_recommended:'Não recomendada',missing:'Faltam dados'} as const;
 
 // Cards com todas as promoções para as quais o vendedor foi convidado.
-export function CampaignCards({labels}:{labels:Record<string,string>}){
+// version muda quando regras de margem ou custos são salvos: a promoção aberta é analisada de novo.
+export function CampaignCards({labels,version}:{labels:Record<string,string>;version:number}){
  const [state,setState]=useState<{campaigns?:Campaign[];enabled?:boolean;error?:string}|null>(null),[counts,setCounts]=useState<Record<string,Counts>>({});
  const [open,setOpen]=useState<string|null>(null),[attempt,setAttempt]=useState(0);
  useEffect(()=>{
@@ -58,7 +59,7 @@ export function CampaignCards({labels}:{labels:Record<string,string>}){
   {!groups.length?<p className="gp-note">Nenhuma promoção disponível no Mercado Livre agora.</p>
    :<div className="gp-campaign-grid">{groups.flatMap(g=>g.items.map(c=>card(c,g.title)))}</div>}
   <p className="gp-note">Etiqueta azul: o gestor ativa. Cinza: ativar pela Central. disp. = anúncios disponíveis · part. = participando.</p>
-  {current&&<CampaignDetail key={current.id} campaign={{...current,name:displayName(current)}} counts={counts[current.id]} labels={labels} enabled={!!state.enabled} onClose={()=>setOpen(null)}/>}
+  {current&&<CampaignDetail key={current.id+':'+version} campaign={{...current,name:displayName(current)}} counts={counts[current.id]} labels={labels} enabled={!!state.enabled} onClose={()=>setOpen(null)}/>}
  </div>;
 }
 
