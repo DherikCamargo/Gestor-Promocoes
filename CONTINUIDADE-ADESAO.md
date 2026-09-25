@@ -54,3 +54,12 @@ Pedido de Dherik: ver as datas das promoções para que o anúncio não fique ne
 
 ## Ajuste — 25/09/2026
 A pedido de Dherik, a seção "Sem promoção" deixou de repetir os anúncios que já aparecem em "Aptas para ativar": agora é "Sem promoção e sem oferta apta", só com os que não têm nenhuma oferta apta e o motivo.
+
+## Cards de promoções — 25/09/2026
+Pedido de Dherik: tirar os cards de filtro da lista (Todos, Em promoção, Preço por variação, Com falha, Sem custo) e mostrar um card por promoção disponível no Mercado Livre; ao clicar, os anúncios e variações aptos, com "ativar todas" ou "só as selecionadas".
+- lib/campaigns.ts: `listCampaigns` (GET /seller-promotions/users/{seller}?app_version=v2, paginação offset, até 4 páginas) e `campaignItems` (GET /seller-promotions/promotions/{id}/items?promotion_type=…&app_version=v2&limit=50, paginação search_after — lida em paging.searchAfter/search_after ou no topo —, até 20 páginas; cursor repetido ou limite = lista parcial). Ids e tipos validados.
+- Rotas: /api/mercado-livre/promocoes/campanhas e /campanhas/itens?promotionId&type (somente leitura). /promocoes/analise aceita `promotionId` para analisar só aquela promoção (menos consultas).
+- app/campaign-cards.tsx: cards com nome da API, tipo, período, prazo para aderir ("aderir até"), disponíveis e participando (contagens carregadas duas por vez, por causa do limite de subrequisições do Worker). Ao clicar: analisa só a promoção em cada candidato (duas por vez), aptas pré-marcadas, "Ativar todas as aptas (N)" e "Ativar selecionadas (N)" com confirmação, resultado por anúncio; lista recolhida dos já participantes. Tipos fora de SMART/PRICE_MATCHING/MARKETPLACE_CAMPAIGN mostram análise, sem ativação.
+- A lista de anúncios perdeu os cards de filtro; a busca continua. O Painel de promoções (datas e alertas) continua.
+- Nomes dos cards são os da API (ex.: "Set26 | Top Sellers", "10.10"); textos como "Aumente sua competitividade" podem ser rótulos da Central, não o nome da campanha — confirmar após publicar.
+- Testes: 86/86 (4 novos em tests/campaigns.test.mjs). Sem teste visual; sem consulta real nesta etapa.
