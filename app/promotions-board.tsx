@@ -110,9 +110,10 @@ export function PromotionsBoard({items}:{items:BoardItem[]}){
      :<Button type="button" className="gp-activate" disabled={!pending.length} onClick={()=>setConfirming(true)}>Ativar selecionadas ({pending.length})</Button>}
    </>}
 
-   <h2 className="gp-board-title">Sem promoção ({available.length+none.length} anúncios)</h2>
-   {!(available.length+none.length)?<p className="gp-note">{scan.running?'Procurando…':'Todos os anúncios analisados estão em promoção.'}</p>
-    :<ul className="gp-family-rows">{[...available,...none].map(e=><li key={e.item.itemId}><span>{e.item.label}</span><span className={e.cls?.status==='available'?'gp-verdict gp-ok':'gp-note'}>{e.cls?.status==='available'?`${e.cls.apt.length} oferta${e.cls.apt.length>1?'s':''} apta${e.cls.apt.length>1?'s':''} (acima)`:(e.cls as Extract<ListingClass,{status:'none'}>).reason}</span></li>)}</ul>}
+   {/* Os anúncios sem promoção com oferta apta já estão em "Aptas para ativar"; aqui só os que não têm nenhuma. */}
+   <h2 className="gp-board-title">Sem promoção e sem oferta apta ({none.length})</h2>
+   {!none.length?<p className="gp-note">{scan.running?'Procurando…':'Todo anúncio sem promoção tem pelo menos uma oferta apta (acima).'}</p>
+    :<ul className="gp-family-rows">{none.map(e=><li key={e.item.itemId}><span>{e.item.label}</span><span className="gp-note">{(e.cls as Extract<ListingClass,{status:'none'}>).reason}</span></li>)}</ul>}
 
    {active.length>0&&<details className="gp-calc"><summary>Já em promoção ({active.length})</summary><ul className="gp-family-rows">{active.map(e=>{const a=(e.cls as Extract<ListingClass,{status:'active'}>).active;return <li key={e.item.itemId}><span>{e.item.label}</span><span>{a.name}<span className="gp-note">{period(a)}</span></span><span>{a.price!==null?brl(a.price):'—'}</span><span className="gp-note">{a.status==='pending'?'programada':'ativa'}{a.coverage.state==='ok'&&a.coverage.until!==null?` · coberto até ${fmt(a.coverage.until)}`:a.coverage.state==='ok'?' · sem fim informado':''}</span></li>})}</ul></details>}
   </>}
