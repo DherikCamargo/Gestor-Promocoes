@@ -3,12 +3,14 @@ import {useEffect,useState} from 'react';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import type {Analysis,MarginRules} from '@/lib/offer-analysis';
-type Offer={id:string|null;refId:string|null;type:string|null;name:string|null;status:string;start:string|null;finish:string|null;min:number|null;max:number|null;originalPrice:number|null;price?:number;priceSource?:'offer'|'suggested';feePercentage?:number|null;analysis?:Analysis;reason?:string;blockReason:string|null};
+type Offer={id:string|null;refId:string|null;type:string|null;name:string|null;status:string;start:string|null;finish:string|null;min:number|null;max:number|null;originalPrice:number|null;price?:number;priceSource?:'offer'|'suggested';feePercentage?:number|null;analysis?:Analysis;reason?:string;blockReason:string|null;key:string|null;priceChoice:PriceChoice|null};
+export type PriceChoice={min:number|null;max:number|null;originalPrice:number|null;suggested:number|null};
 type Report={title:string;currency:string;offers:Offer[];warnings:string[];participationEnabled:boolean};
 export type Outcome={status:'confirmed'|'divergent'|'unverified'|'refused'|'failed';price?:number|null;expected?:number;state?:string;detail?:string;error?:string};
 // Uma adesão por pedido; o servidor revalida margem, tipo e preço antes de enviar.
-export async function activate(itemId:string,refId:string):Promise<Outcome>{
- try{const r=await fetch('/api/mercado-livre/promocoes/participar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({itemId,refId})});const d=await r.json() as Outcome;return d.status?d:{status:'failed',detail:d.error||'Adesão indisponível.'}}
+// choice: preço escolhido (campanha tradicional e desconto individual) e duração do desconto individual.
+export async function activate(itemId:string,refId:string,choice?:{price:number;days?:number}):Promise<Outcome>{
+ try{const r=await fetch('/api/mercado-livre/promocoes/participar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({itemId,refId,...choice})});const d=await r.json() as Outcome;return d.status?d:{status:'failed',detail:d.error||'Adesão indisponível.'}}
  catch{return {status:'failed',detail:'Sem resposta do servidor. Confira na Central antes de tentar de novo.'}}
 }
 export const outcomeText=(o:Outcome)=>o.status==='confirmed'?`Ativada: ${o.state==='pending'?'programada':'participando'} por ${brl(o.price!)}.`:o.status==='divergent'?`Atenção: preço aplicado ${o.price!=null?brl(o.price):'desconhecido'} (esperado ${brl(o.expected!)}). Confira na Central.`:o.detail||o.error||'Não concluída.';
@@ -71,10 +73,11 @@ function OfferRow({offer:o,itemId,enabled,onRecheck}:{offer:Offer;itemId:string;
     <li><strong>= Lucro {brl(a.profit!)} · margem {pct(a.margin!)}</strong></li>
    </ul></details>}
   </>}
-  {o.status==='candidate'&&enabled&&(o.blockReason?<p className="gp-note">Ativação: {o.blockReason}</p>
+  {o.status==='candidate'&&enabled&&o.priceChoice&&o.key?<PriceChooser itemId={itemId} offerKey={o.key} type={o.type!} name={o.name||typeNames[o.type??'']||'Promoção'} choice={o.priceChoice}/>
+  :o.status==='candidate'&&enabled&&(o.blockReason?<p className="gp-note">Ativação: {o.blockReason}</p>
    :outcome?<div className="gp-cost-actions"><p className={'gp-verdict '+outcomeTone(outcome)} role="status">{outcomeText(outcome)}</p>{outcome.status==='unverified'&&<Button size="sm" variant="outline" type="button" onClick={onRecheck}>Conferir de novo</Button>}</div>
    :step==='idle'?<Button size="sm" type="button" className="gp-activate" onClick={()=>setStep('confirm')}>Ativar</Button>
-   :<div className="gp-confirm" role="alertdialog" aria-label="Confirmar adesão"><p>Ativar <strong>{o.name||typeNames[o.type??'']}</strong> neste anúncio por <strong>{brl(a!.price)}</strong> (margem {pct(a!.margin!)})? O preço do anúncio no Mercado Livre muda.</p><span className="gp-cost-actions"><Button size="sm" type="button" disabled={step==='sending'} onClick={async()=>{setStep('sending');const r=await activate(itemId,o.refId??o.id!);setOutcome(r);setStep('idle')}}>{step==='sending'?'Ativando…':'Confirmar'}</Button><Button size="sm" variant="ghost" type="button" disabled={step==='sending'} onClick={()=>setStep('idle')}>Cancelar</Button></span></div>)}
+   :<div className="gp-confirm" role="alertdialog" aria-label="Confirmar adesão"><p>Ativar <strong>{o.name||typeNames[o.type??'']}</strong> neste anúncio por <strong>{brl(a!.price)}</strong> (margem {pct(a!.margin!)})? O preço do anúncio no Mercado Livre muda.</p><span className="gp-cost-actions"><Button size="sm" type="button" disabled={step==='sending'} onClick={async()=>{setStep('sending');const r=await activate(itemId,o.key!);setOutcome(r);setStep('idle')}}>{step==='sending'?'Ativando…':'Confirmar'}</Button><Button size="sm" variant="ghost" type="button" disabled={step==='sending'} onClick={()=>setStep('idle')}>Cancelar</Button></span></div>)}
  </div>;
 }
 
@@ -176,5 +179,43 @@ export function FamilyActivation({items,version}:{items:FamilyItem[];version:num
      :<Button size="sm" type="button" className="gp-activate" disabled={running!==null} onClick={()=>setConfirming(c.key)}>{running===c.key?'Ativando…':`Ativar nas ${apt.length} variações aptas`}</Button>)}
    </div>;
   })}
+ </div>;
+}
+
+// Escolher o preço (campanha tradicional e desconto individual): prévia da margem no servidor a cada
+// alteração (com espera de 0,6 s) e adesão com o preço digitado, conferido de novo no servidor.
+export function PriceChooser({itemId,offerKey,type,name,choice}:{itemId:string;offerKey:string;type:string;name:string;choice:PriceChoice}){
+ const [value,setValue]=useState(choice.suggested!==null?String(choice.suggested).replace('.',','):''),[days,setDays]=useState(14);
+ const [preview,setPreview]=useState<{analysis?:Analysis;reason?:string|null;loading:boolean}|null>(null);
+ const [step,setStep]=useState<'idle'|'confirm'|'sending'>('idle'),[outcome,setOutcome]=useState<Outcome|null>(null);
+ const price=Number(value.trim().replace(',','.'));
+ const valid=value.trim()!==''&&Number.isFinite(price)&&price>0;
+ useEffect(()=>{
+  if(!valid)return;
+  let active=true;
+  const t=setTimeout(async()=>{
+   if(active)setPreview(p=>({...p,loading:true}));
+   try{const r=await fetch('/api/mercado-livre/promocoes/analise?'+new URLSearchParams({itemId,promotionId:offerKey,price:String(price)}),{cache:'no-store'});
+    const d=await r.json() as {offers?:{key:string|null;analysis?:Analysis;reason?:string;blockReason:string|null}[];error?:string};
+    const o=d.offers?.find(x=>x.key===offerKey);
+    if(active)setPreview(!r.ok||!o?{reason:d.error||'Prévia indisponível.',loading:false}:{analysis:o.analysis,reason:o.blockReason??o.reason??null,loading:false});
+   }catch{if(active)setPreview({reason:'Prévia indisponível.',loading:false})}
+  },600);
+  return()=>{active=false;clearTimeout(t)};
+ },[itemId,offerKey,price,valid]);
+ const a=preview?.analysis,ok=valid&&!preview?.loading&&!preview?.reason&&a?.status==='approved';
+ const discount=type==='PRICE_DISCOUNT'&&choice.originalPrice&&valid?1-price/choice.originalPrice:null;
+ if(outcome)return <p className={'gp-verdict '+outcomeTone(outcome)} role="status">{outcomeText(outcome)}</p>;
+ return <div className="gp-price-chooser">
+  <div className="gp-cost-actions">
+   <label className="gp-price-field">Seu preço (R$)<Input inputMode="decimal" value={value} disabled={step!=='idle'} onChange={e=>{setValue(e.target.value);setStep('idle')}}/></label>
+   {type==='PRICE_DISCOUNT'&&<label className="gp-price-field">Duração<select value={days} disabled={step!=='idle'} onChange={e=>setDays(Number(e.target.value))}>{Array.from({length:14},(_,i)=><option key={i+1} value={i+1}>{i+1} dia{i?'s':''}</option>)}</select></label>}
+  </div>
+  <span className="gp-note">{[choice.min!==null&&choice.max!==null&&`aceita de ${brl(choice.min)} a ${brl(choice.max)}`,choice.suggested!==null&&`sugerido ${brl(choice.suggested)}`,discount!==null&&`desconto de ${pct(discount)} sobre ${brl(choice.originalPrice!)}`,type==='PRICE_DISCOUNT'&&'desconto individual: 5% a menos de 80%, até 14 dias'].filter(Boolean).join(' · ')}</span>
+  <span role="status">{!valid?<span className="gp-note">Digite um preço.</span>:!preview||preview.loading?<span className="gp-note">Calculando a margem…</span>
+   :preview.reason?<span className="gp-danger">{preview.reason}</span>
+   :a?<><span className={'gp-verdict '+(a.status==='approved'?'gp-ok':a.status==='attention'?'gp-warn':'gp-bad')}>{a.status==='approved'?'Aprovada':a.status==='attention'?'Atenção':a.status==='missing'?'Faltam dados':'Não recomendada'}</span> {a.margin!==null?`margem ${pct(a.margin)} · lucro ${brl(a.profit!)}`:a.missing.join(', ')}</>:null}</span>
+  {step==='confirm'||step==='sending'?<div className="gp-confirm" role="alertdialog" aria-label="Confirmar adesão com preço escolhido"><p>Ativar <strong>{name}</strong> neste anúncio por <strong>{brl(price)}</strong>{type==='PRICE_DISCOUNT'?` por ${days} dia${days>1?'s':''}`:''} (margem {pct(a!.margin!)})? O preço do anúncio no Mercado Livre muda.</p><span className="gp-cost-actions"><Button size="sm" type="button" disabled={step==='sending'} onClick={async()=>{setStep('sending');setOutcome(await activate(itemId,offerKey,{price,...(type==='PRICE_DISCOUNT'?{days}:{})}))}}>{step==='sending'?'Ativando…':'Confirmar'}</Button><Button size="sm" variant="ghost" type="button" disabled={step==='sending'} onClick={()=>setStep('idle')}>Cancelar</Button></span></div>
+   :<Button size="sm" type="button" className="gp-activate" disabled={!ok} onClick={()=>setStep('confirm')}>{valid?`Ativar por ${brl(price)}`:'Ativar'}</Button>}
  </div>;
 }
