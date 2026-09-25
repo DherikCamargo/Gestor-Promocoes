@@ -34,9 +34,13 @@ export function participationPayload(o:OfferIdentity):Record<string,string>{
 
 export type Verification={status:'confirmed';price:number;state:'started'|'pending';offerId:string|null}|{status:'divergent';price:number|null;expected:number;offerId:string|null}|{status:'not_found'};
 // Depois da adesão: a oferta da mesma campanha precisa aparecer ativa ou programada com o preço esperado.
+// O offer_id devolvido pelo POST nem sempre é igual ao ref_id da lista (1º teste real, MLB com Set26 |
+// Top Sellers em 25/09/2026: ativa na Central, mas não reconhecida). Ele só desempata quando a mesma
+// campanha tem mais de uma oferta ativa/programada.
 export function verifyParticipation(after:unknown,x:{promotionId:string;type:string;expectedPrice:number;offerId:string|null}):Verification{
  if(!Array.isArray(after))return {status:'not_found'};
- const matches=after.map(record).filter(o=>o.id===x.promotionId&&o.type===x.type&&(o.status==='started'||o.status==='pending')&&(!x.offerId||o.ref_id===x.offerId));
+ const active=after.map(record).filter(o=>o.id===x.promotionId&&o.type===x.type&&(o.status==='started'||o.status==='pending'));
+ const matches=active.length>1&&x.offerId?active.filter(o=>o.ref_id===x.offerId):active;
  if(matches.length!==1)return {status:'not_found'};
  const o=matches[0],price=promotionPrice(o),offerId=typeof o.ref_id==='string'?o.ref_id:null;
  if(price===null||Math.round(price*100)!==Math.round(x.expectedPrice*100))return {status:'divergent',price,expected:x.expectedPrice,offerId};

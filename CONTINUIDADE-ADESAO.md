@@ -24,3 +24,11 @@ pnpm test 71/71 (9 novos em tests/participation.test.mjs com ML simulado: adesã
 2. GitHub → Settings → Variables → `PARTICIPATION_ENABLED=true` e rodar o workflow.
 3. Primeiro teste em **um** anúncio/variação, conferindo o resultado com a Central (preço, status, subsídio). Só depois usar a ativação da família.
 4. Se aparecer "Atenção: preço aplicado…" ou "unverified": conferir na Central; para desligar tudo, `PARTICIPATION_ENABLED=false` e rodar o workflow.
+
+## Primeiro teste real — 25/09/2026
+Autorizado por Dherik ("autorizo ligar as adesões"); PARTICIPATION_ENABLED=true publicado.
+- Oferta SMART "Set26 | Top Sellers" (Co-participação), analisada pelo gestor: preço R$ 172,71, subsídio R$ 6,71, tarifa R$ 24,18 (14%) → líquida R$ 17,47, frete R$ 21,75, custo R$ 50, lucro R$ 41,31 (23,92%), Aprovada.
+- Central após a adesão: "Com redução de tarifas", 11 a 30/set, **ATIVA**, R$ 172,71, "Reduzimos R$ 6,71", recebe R$ 133,49 = 172,71 − 17,47 − 21,75. Preço, subsídio e valor recebido **idênticos** ao analisado.
+- Gestor mostrou "unverified" (aceito, mas não apareceu ativo): a conferência exigia ref_id igual ao offer_id devolvido pelo POST e fazia 3 leituras em ~4 s.
+
+Correção: verifyParticipation aceita a oferta da mesma campanha e tipo, ativa/programada, com o preço esperado; o offer_id só desempata quando há mais de uma. 5 leituras (~10 s). participation_log guarda offer_id e preço da resposta e o resumo da campanha na última leitura. Botão "Conferir de novo" para resultados não confirmados (anúncio e família). Testes 72/72 (caso real incluído).

@@ -36,11 +36,14 @@ export async function participateOffer(d:{api:Api;itemId:string;refId:string;ove
   return {status:'failed',detail};
  }
  const responseOfferId=typeof response.offer_id==='string'?response.offer_id:null;
- // A oferta pode demorar alguns segundos para aparecer; até 3 leituras.
+ // A oferta pode demorar alguns segundos para aparecer; até 5 leituras (cerca de 10 s).
  let v=verifyParticipation(null,{promotionId:offer.id!,type:offer.type!,expectedPrice:expected,offerId:responseOfferId});
- for(let i=0;i<3&&v.status==='not_found';i++){
+ let seen='';
+ for(let i=0;i<5&&v.status==='not_found';i++){
   if(i)await wait(2000);
   const after=await api.get<unknown>('/seller-promotions/items/'+itemId+'?app_version=v2').catch(()=>null);
+  // Resumo da campanha na última leitura, para diagnóstico no registro.
+  seen=JSON.stringify((Array.isArray(after)?after:[]).map(record).filter(o=>o.id===offer.id).map(o=>({status:o.status,ref_id:o.ref_id,price:o.price})));
   v=verifyParticipation(after,{promotionId:offer.id!,type:offer.type!,expectedPrice:expected,offerId:responseOfferId});
  }
  const responsePrice=typeof response.price==='number'?response.price:null;
@@ -49,6 +52,6 @@ export async function participateOffer(d:{api:Api;itemId:string;refId:string;ove
  const result:ParticipationResult=v.status==='confirmed'?{status:'confirmed',price:v.price,state:v.state,margin:offer.analysis.margin!}
   :v.status==='divergent'?{status:'divergent',price:v.price,expected,detail:'O preço aplicado pelo Mercado Livre é diferente do analisado. Confira na Central.'}
   :{status:'unverified',expected,detail:'O Mercado Livre aceitou o pedido, mas a oferta ainda não apareceu ativa. Confira na Central.'};
- await d.log({...base,expectedPrice:expected,resultPrice:'price' in result?result.price:null,status:result.status,detail:'detail' in result?result.detail:''});
+ await d.log({...base,expectedPrice:expected,resultPrice:'price' in result?result.price:null,status:result.status,detail:JSON.stringify({message:'detail' in result?result.detail:'',responseOfferId,responsePrice,seen})});
  return result;
 }

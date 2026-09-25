@@ -35,11 +35,11 @@ export function OfferPanel({itemId,version}:{itemId:string;version:number}){
  return <div className="gp-panel">
   <p className="gp-note">{state.report!.participationEnabled?'':'Adesões desligadas: somente análise. '}{offers.length?`${approved} de ${offers.length} promoç${offers.length>1?'ões':'ão'} com margem aprovada.`:'Nenhuma promoção disponível, programada ou ativa para este anúncio.'}</p>
   {warnings.map(w=><p key={w} className="gp-note gp-danger">{w}</p>)}
-  {offers.map((o,i)=><OfferRow key={(o.refId??o.id??'')+i} offer={o} itemId={itemId} enabled={state.report!.participationEnabled}/>)}
+  {offers.map((o,i)=><OfferRow key={(o.refId??o.id??'')+i} offer={o} itemId={itemId} enabled={state.report!.participationEnabled} onRecheck={()=>{setState(null);setAttempt(a=>a+1)}}/>)}
  </div>;
 }
 
-function OfferRow({offer:o,itemId,enabled}:{offer:Offer;itemId:string;enabled:boolean}){
+function OfferRow({offer:o,itemId,enabled,onRecheck}:{offer:Offer;itemId:string;enabled:boolean;onRecheck:()=>void}){
  const [step,setStep]=useState<'idle'|'confirm'|'sending'>('idle'),[outcome,setOutcome]=useState<Outcome|null>(null);
  const a=o.analysis,[label,tone]=a?verdicts[a.status]:['Não analisada','gp-neutral'];
  const period=[date(o.start),date(o.finish)].filter(Boolean).join(' a ');
@@ -72,7 +72,7 @@ function OfferRow({offer:o,itemId,enabled}:{offer:Offer;itemId:string;enabled:bo
    </ul></details>}
   </>}
   {o.status==='candidate'&&enabled&&(o.blockReason?<p className="gp-note">Ativação: {o.blockReason}</p>
-   :outcome?<p className={'gp-verdict '+outcomeTone(outcome)} role="status">{outcomeText(outcome)}</p>
+   :outcome?<div className="gp-cost-actions"><p className={'gp-verdict '+outcomeTone(outcome)} role="status">{outcomeText(outcome)}</p>{outcome.status==='unverified'&&<Button size="sm" variant="outline" type="button" onClick={onRecheck}>Conferir de novo</Button>}</div>
    :step==='idle'?<Button size="sm" type="button" className="gp-activate" onClick={()=>setStep('confirm')}>Ativar</Button>
    :<div className="gp-confirm" role="alertdialog" aria-label="Confirmar adesão"><p>Ativar <strong>{o.name||typeNames[o.type??'']}</strong> neste anúncio por <strong>{brl(a!.price)}</strong> (margem {pct(a!.margin!)})? O preço do anúncio no Mercado Livre muda.</p><span className="gp-cost-actions"><Button size="sm" type="button" disabled={step==='sending'} onClick={async()=>{setStep('sending');const r=await activate(itemId,o.refId??o.id!);setOutcome(r);setStep('idle')}}>{step==='sending'?'Ativando…':'Confirmar'}</Button><Button size="sm" variant="ghost" type="button" disabled={step==='sending'} onClick={()=>setStep('idle')}>Cancelar</Button></span></div>)}
  </div>;
@@ -122,7 +122,7 @@ type Campaign={key:string;name:string;type:string|null;rows:CampaignRow[]};
 // Um clique ativa a campanha em todas as variações aprovadas, uma por vez, com confirmação.
 export function FamilyActivation({items,version}:{items:FamilyItem[];version:number}){
  const [data,setData]=useState<{campaigns:Campaign[];enabled:boolean;failed:string[];done:number}|null>(null);
- const [confirming,setConfirming]=useState<string|null>(null),[running,setRunning]=useState<string|null>(null),[outcomes,setOutcomes]=useState<Record<string,Outcome>>({});
+ const [confirming,setConfirming]=useState<string|null>(null),[running,setRunning]=useState<string|null>(null),[outcomes,setOutcomes]=useState<Record<string,Outcome>>({}),[recheck,setRecheck]=useState(0);
  useEffect(()=>{
   let active=true;
   (async()=>{
@@ -147,7 +147,7 @@ export function FamilyActivation({items,version}:{items:FamilyItem[];version:num
    if(active)setData({campaigns:[...campaigns.values()].sort((a,b)=>b.rows.filter(r=>!r.blockReason).length-a.rows.filter(r=>!r.blockReason).length),enabled,failed,done});
   })();
   return()=>{active=false};
- },[items,version]);
+ },[items,version,recheck]);
  async function run(c:Campaign){
   setConfirming(null);setRunning(c.key);
   for(const r of c.rows.filter(r=>!r.blockReason)){
@@ -161,6 +161,7 @@ export function FamilyActivation({items,version}:{items:FamilyItem[];version:num
  return <div className="gp-panel">
   <p className="gp-note">{loading?`Analisando… ${data.done} de ${items.length} variações.`:`${items.length} variações analisadas.`}{data.enabled?'':' Adesões desligadas: somente análise.'}</p>
   {data.failed.length>0&&<p className="gp-note gp-danger">Sem análise: {data.failed.join(', ')}.</p>}
+  {running===null&&Object.values(outcomes).some(o=>o.status==='unverified')&&<Button size="sm" variant="outline" type="button" className="gp-activate" onClick={()=>{setOutcomes({});setData(null);setRecheck(n=>n+1)}}>Conferir de novo as variações não confirmadas</Button>}
   {!loading&&!data.campaigns.length&&<p className="gp-note">Nenhuma promoção disponível para as variações desta família.</p>}
   {data.campaigns.map(c=>{
    const apt=c.rows.filter(r=>!r.blockReason);
