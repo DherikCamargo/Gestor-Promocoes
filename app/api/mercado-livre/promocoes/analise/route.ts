@@ -2,6 +2,7 @@ import {actor,json,PARTICIPATION_ENABLED} from '@/lib/mercado-livre';
 import {mlSession,MlError} from '@/lib/ml-api';
 import {defaultRules} from '@/lib/offer-analysis';
 import {buildOfferReport} from '@/lib/offer-report';
+import {offerKey} from '@/lib/participation';
 import {loadCostOverrides,loadRules} from '@/lib/owner-settings';
 // Análise das promoções de um anúncio (somente leitura). A adesão fica em /promocoes/participar.
 const text=(v:unknown)=>typeof v==='string'&&v?v:null;
@@ -22,11 +23,17 @@ export async function GET(request:Request){
   ]);
   if(!Array.isArray(raw))throw new MlError('O Mercado Livre retornou um formato de ofertas não reconhecido.',502);
   const rules=settings?.rules??defaultRules;
-  const selected=only?raw.filter(o=>o&&typeof o==='object'&&(o as {id?:unknown}).id===only):raw;
+  // promotionId pode ser o id da campanha, o ref_id da oferta ou "PRICE_DISCOUNT" (desconto individual).
+  const keyOf=(o:Record<string,unknown>)=>offerKey({id:text(o.id),refId:text(o.ref_id),type:text(o.type)});
+  const selected=only?raw.filter(o=>{const r=(o&&typeof o==='object'?o:{}) as Record<string,unknown>;return r.id===only||keyOf(r)===only}):raw;
+  // price (opcional, com promotionId): prévia da margem no preço escolhido pelo vendedor.
+  const priceParam=params.get('price'),price=priceParam===null?null:Number(priceParam);
+  if(price!==null&&(!only||!Number.isFinite(price)||price<=0||price>1000000))throw new MlError('Preço inválido.',400);
+  const priceFor=price!==null&&selected.length===1?{key:keyOf(selected[0] as Record<string,unknown>)??'',price}:undefined;
   // Promoção em que o anúncio já está (ativa ou programada), para avisar nos cards de outras promoções.
   const current=raw.map(o=>(o&&typeof o==='object'?o:{}) as Record<string,unknown>).find(o=>(o.status==='started'||o.status==='pending')&&o.id!==only);
   const currentPromotion=current?{name:text(current.name)??text(current.type),type:text(current.type),status:String(current.status),finish:text(current.finish_date)??text(current.end_date)}:null;
-  const {cost,offers}=await buildOfferReport(api,item,selected,overrides??{},rules);
+  const {cost,offers}=await buildOfferReport(api,item,selected,overrides??{},rules,priceFor);
   return json({itemId:id,title:text(item.title)??id,currency,cost,rules,rulesEdited:settings?.edited??false,
    warnings:[...(overrides===null?['Custos editados indisponíveis: usando custos padrão.']:[]),...(settings===null?['Regras de margem indisponíveis: usando as regras padrão.']:[])],
    offers,currentPromotion,participationEnabled:PARTICIPATION_ENABLED&&overrides!==null&&settings!==null,queriedAt:new Date().toISOString()});

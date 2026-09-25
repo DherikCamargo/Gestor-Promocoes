@@ -82,6 +82,16 @@ A pedido de Dherik (cards ocupando muito espaço): todos os cards numa grade ún
 ## Painel de promoções removido — 25/09/2026
 A pedido de Dherik, com os cards de promoções o "Painel de promoções" deixou de ser necessário: removidos app/promotions-board.tsx, lib/promotion-board.ts, lib/promotion-dates.ts e seus testes. Com ele saiu o alerta "Podem ficar sem promoção" (término em até 3 dias sem continuação); o código fica no histórico do Git (PRs #16 e #17) se for preciso levá-lo para os cards. Testes 80/80.
 
+## Escolher o preço: campanha tradicional e desconto individual — 25/09/2026
+Pedido de Dherik: onde aparecia "Neste tipo você escolhe o preço… ative pela Central", poder digitar/escolher o preço. Decisão: primeiro DEAL e PRICE_DISCOUNT (reversíveis); LIGHTNING e DOD (irreversíveis, relâmpago com estoque e preço da API divergente da Central) num segundo passo.
+Contratos (documentação 09/06/2026): DEAL `{promotion_id, promotion_type:'DEAL', deal_price}` dentro de min/max da campanha; PRICE_DISCOUNT `{deal_price, start_date, finish_date, promotion_type}` (datas sem fuso, Brasília; até 14 dias; desconto de 5% a < 80%; página real /pt_br/desconto-individua). A oferta PRICE_DISCOUNT vem sem id nem ref_id: chave "PRICE_DISCOUNT" (`offerKey`).
+- lib/participation.ts: `structuralBlock` (status, tipo, ids; LIGHTNING/DOD bloqueados), `activationBlock` (+ margem), `priceChoiceProblem`, `discountDates`, `participationPayload(o, choice)`, `verifyParticipation` aceita promotionId nulo (confere pelo tipo).
+- lib/offer-report.ts: `key` e `priceChoice` (min, max, preço original, sugerido) nas ofertas de preço escolhido; `priceFor` analisa a oferta no preço digitado (limites conferidos antes).
+- lib/participate.ts: `choice {price, days}`; bloqueio estrutural antes das regras de preço; exige preço nos tipos de preço escolhido e recusa preço nos de preço do ML; refaz a análise no preço escolhido, exige Aprovada, envia o payload do tipo e confere o preço aplicado.
+- Rotas: /promocoes/analise aceita `price` (com promotionId = id, ref_id ou PRICE_DISCOUNT) para a prévia; /promocoes/participar aceita `price` e `days` (1–14).
+- Tela: `PriceChooser` (campo de preço com o sugerido, faixa aceita, desconto e duração no individual, prévia da margem no servidor a cada alteração com espera de 0,6 s, "Ativar por R$ X" só com margem aprovada, confirmação). No painel Promoções do anúncio e nos cards (botão "Escolher preço" por anúncio; sem ativação em lote nesses tipos). Etiqueta azul também para esses tipos.
+- Testes 86/86 (8 novos). Sem teste visual; nenhuma adesão real com preço escolhido ainda — primeiro uso em um anúncio, conferindo na Central.
+
 ## Aba "Sem promoção" — 25/09/2026
 Pedido de Dherik: aba com anúncios sem promoção, só no preço bruto.
 - lib/sale-state.ts: `saleState(sale_price)` = promotion (regular_amount > amount), regular (preço normal) ou unknown (sem preço: nunca contado como sem promoção).

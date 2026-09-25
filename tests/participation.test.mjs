@@ -43,11 +43,64 @@ test('margem reprovada com o custo atual: não envia nada',async()=>{
  assert.equal(calls.post.length,0);assert.equal(log.length,0);
 });
 
-test('tipo em que o vendedor escolhe o preço (DEAL): não envia nada',async()=>{
- const deal={id:'P-MLB18049186',type:'DEAL',status:'candidate',ref_id:'CANDIDATE-MLB1-1',price:0,original_price:199.9,min_discounted_price:43.6,max_discounted_price:189.9,suggested_discounted_price:150};
+// Campanha tradicional (10.10): o vendedor escolhe o preço dentro do mínimo/máximo.
+const deal={id:'P-MLB18061082',type:'DEAL',name:'10.10',status:'candidate',price:0,original_price:199.9,min_discounted_price:43.6,max_discounted_price:189.9,suggested_discounted_price:189.9};
+const dealRun=(api,choice,extra={})=>{const log=[];return participateOffer({api,itemId:'MLB1',refId:deal.id,overrides:{},rules:defaultRules,log:async e=>{log.push(e)},wait:async()=>{},choice,...extra}).then(r=>({r,log}))};
+
+test('campanha tradicional sem preço informado: não envia nada',async()=>{
  const {api,calls}=mockApi({offers:[deal]});
- const r=await participateOffer({api,itemId:'MLB1',refId:deal.ref_id,overrides:{},rules:defaultRules,log:async()=>{},wait:async()=>{}});
- assert.equal(r.status,'refused');assert.match(r.detail,/Central/);assert.equal(calls.post.length,0);
+ const {r}=await dealRun(api,undefined);
+ assert.equal(r.status,'refused');assert.match(r.detail,/Informe o preço/);assert.equal(calls.post.length,0);
+});
+
+test('campanha tradicional com preço escolhido: envia deal_price e confere o preço aplicado',async()=>{
+ const {api,calls}=mockApi({offers:[deal],after:[{...deal,status:'started',price:150}],post:()=>({price:150,original_price:199.9})});
+ const {r,log}=await dealRun(api,{price:150});
+ assert.equal(r.status,'confirmed');assert.equal(r.price,150);
+ assert.deepEqual(calls.post[0].body,{promotion_id:'P-MLB18061082',promotion_type:'DEAL',deal_price:150});
+ assert.deepEqual(log.map(e=>e.status),['requested','confirmed']);
+});
+
+test('preço escolhido fora dos limites ou com margem reprovada: não envia nada',async()=>{
+ for(const [price,msg] of [[190,/Acima do máximo/],[40,/Abaixo do mínimo/],[149.999,/Informe um preço/]]){
+  const {api,calls}=mockApi({offers:[deal]});
+  const {r}=await dealRun(api,{price});
+  assert.equal(r.status,'refused');assert.match(r.detail,msg);assert.equal(calls.post.length,0);
+ }
+ const {api,calls}=mockApi({offers:[deal]});
+ const {r}=await dealRun(api,{price:60});
+ assert.equal(r.status,'refused');assert.match(r.detail,/Margem abaixo do mínimo/);assert.equal(calls.post.length,0);
+});
+
+test('promoção de preço do Mercado Livre não aceita preço escolhido',async()=>{
+ const {api,calls}=mockApi();
+ const r=await participateOffer({api,itemId:'MLB1',refId:smart.ref_id,overrides:{},rules:defaultRules,log:async()=>{},wait:async()=>{},choice:{price:100}});
+ assert.equal(r.status,'refused');assert.match(r.detail,/definido pelo Mercado Livre/);assert.equal(calls.post.length,0);
+});
+
+// Desconto individual: sem id nem ref_id, identificado pelo tipo; 5% a < 80%, até 14 dias.
+const discount={type:'PRICE_DISCOUNT',name:'',status:'candidate',price:0,original_price:199.9,min_discounted_price:43.6,max_discounted_price:189.9,suggested_discounted_price:189.9};
+test('desconto individual: envia preço e datas (horário de Brasília) e confere pelo tipo',async()=>{
+ const now=Date.parse('2026-09-25T15:00:00Z');
+ const {api,calls}=mockApi({offers:[discount],after:[{...discount,status:'started',price:170}],post:()=>({price:170,original_price:199.9})});
+ const r=await participateOffer({api,itemId:'MLB1',refId:'PRICE_DISCOUNT',overrides:{},rules:defaultRules,log:async()=>{},wait:async()=>{},choice:{price:170,days:7},now});
+ assert.equal(r.status,'confirmed');
+ assert.deepEqual(calls.post[0].body,{deal_price:170,start_date:'2026-09-25T12:00:00',finish_date:'2026-10-02T11:59:00',promotion_type:'PRICE_DISCOUNT'});
+});
+
+test('desconto individual: menos de 5% ou 80% ou mais é recusado',async()=>{
+ for(const [price,msg] of [[195,/pelo menos 5%/],[39.98,/Abaixo do mínimo|menor que 80%/]]){
+  const {api,calls}=mockApi({offers:[{...discount,min_discounted_price:null,max_discounted_price:null}]});
+  const r=await participateOffer({api,itemId:'MLB1',refId:'PRICE_DISCOUNT',overrides:{},rules:defaultRules,log:async()=>{},wait:async()=>{},choice:{price}});
+  assert.equal(r.status,'refused');assert.match(r.detail,msg);assert.equal(calls.post.length,0);
+ }
+});
+
+test('oferta relâmpago continua bloqueada mesmo com preço',async()=>{
+ const lgh={id:'LGH-MLB1000',type:'LIGHTNING',status:'candidate',ref_id:'CANDIDATE-MLB1-9',price:150,original_price:199.9};
+ const {api,calls}=mockApi({offers:[lgh]});
+ const r=await participateOffer({api,itemId:'MLB1',refId:lgh.ref_id,overrides:{},rules:defaultRules,log:async()=>{},wait:async()=>{},choice:{price:150}});
+ assert.equal(r.status,'refused');assert.match(r.detail,/não podem ser desfeitas/);assert.equal(calls.post.length,0);
 });
 
 test('Mercado Livre recusa: resultado "failed" registrado',async()=>{
