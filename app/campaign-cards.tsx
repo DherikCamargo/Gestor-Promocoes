@@ -42,21 +42,21 @@ export function CampaignCards({labels}:{labels:Record<string,string>}){
  if(state.error)return <p className="gp-note gp-danger" role="alert">{state.error} <Button size="sm" variant="outline" onClick={()=>{setState(null);setCounts({});setAttempt(a=>a+1)}}>Tentar de novo</Button></p>;
  const available=(c:Campaign)=>{const v=counts[c.id];return v&&'items' in v?v.items.filter(i=>i.status==='candidate').length:-1};
  const groups=groupCampaigns([...state.campaigns!].sort((a,b)=>available(b)-available(a)||a.name.localeCompare(b.name)));
- const card=(c:Campaign)=>{const v=counts[c.id],cand=v&&'items' in v?v.items.filter(i=>i.status==='candidate').length:null,part=v&&'items' in v?v.items.filter(i=>i.status!=='candidate').length:null;
-  return <button key={c.id} type="button" className="gp-campaign-card" aria-pressed={open===c.id} onClick={()=>setOpen(o=>o===c.id?null:c.id)}>
+ // Todos os cards numa grade única e compacta, na ordem das seções; a seção vira etiqueta no card.
+ const card=(c:Campaign,group:string)=>{const v=counts[c.id],cand=v&&'items' in v?v.items.filter(i=>i.status==='candidate').length:null,part=v&&'items' in v?v.items.filter(i=>i.status!=='candidate').length:null;
+  const dates=[fmt(c.start)&&`${fmt(c.start)}–${fmt(c.finish)??'?'}`,fmt(c.deadline)&&`aderir até ${fmt(c.deadline)}`].filter(Boolean).join(' · ');
+  return <button key={c.id} type="button" className="gp-campaign-card" aria-pressed={open===c.id} onClick={()=>setOpen(o=>o===c.id?null:c.id)} title={`${displayName(c)} · ${typeNames[c.type]??c.type}${activatable.has(c.type)?'':' · ativar pela Central'}`}>
+   <span className={'gp-campaign-tag'+(activatable.has(c.type)?' gp-campaign-tag-on':'')}>{group}</span>
    <strong>{displayName(c)}</strong>
-   <span className="gp-note">{typeNames[c.type]??c.type}{!activatable.has(c.type)?' · ativar pela Central':''}</span>
-   <span className="gp-note">{[fmt(c.start)&&`${fmt(c.start)} a ${fmt(c.finish)??'?'}`,fmt(c.deadline)&&`aderir até ${fmt(c.deadline)}`].filter(Boolean).join(' · ')||'sem datas informadas'}</span>
-   <span className="gp-campaign-counts">{v===undefined?'contando…':'error' in v?v.error:<><b>{cand}</b> disponíve{cand===1?'l':'is'} · <b>{part}</b> participando{v.complete?'':' (parcial)'}</>}</span>
+   <span className="gp-campaign-counts">{v===undefined?'contando…':'error' in v?v.error:<><b>{cand}</b> disp. · <b>{part}</b> part.{v.complete?'':' (parcial)'}</>}</span>
+   {dates&&<span className="gp-note">{dates}</span>}
   </button>};
+ const current=state.campaigns!.find(c=>c.id===open);
  return <div className="gp-campaigns">
   {!groups.length?<p className="gp-note">Nenhuma promoção disponível no Mercado Livre agora.</p>
-   :groups.map(g=>{const total=g.items.reduce((n,c)=>n+Math.max(0,available(c)),0),current=g.items.find(c=>c.id===open);
-    return <section key={g.key} className="gp-campaign-group" aria-label={g.title}>
-     <div className="gp-campaign-group-head"><strong>{g.title}</strong><span className="gp-note">{g.subtitle}</span><span className="gp-note">{g.items.length} promoç{g.items.length===1?'ão':'ões'} · {total} anúncio{total===1?'':'s'} disponíve{total===1?'l':'is'}</span></div>
-     <div className="gp-campaign-grid">{g.items.map(card)}</div>
-     {current&&<CampaignDetail key={current.id} campaign={{...current,name:displayName(current)}} counts={counts[current.id]} labels={labels} enabled={!!state.enabled} onClose={()=>setOpen(null)}/>}
-    </section>})}
+   :<div className="gp-campaign-grid">{groups.flatMap(g=>g.items.map(c=>card(c,g.title)))}</div>}
+  <p className="gp-note">Etiqueta azul: o gestor ativa. Cinza: ativar pela Central. disp. = anúncios disponíveis · part. = participando.</p>
+  {current&&<CampaignDetail key={current.id} campaign={{...current,name:displayName(current)}} counts={counts[current.id]} labels={labels} enabled={!!state.enabled} onClose={()=>setOpen(null)}/>}
  </div>;
 }
 

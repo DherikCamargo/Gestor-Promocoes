@@ -75,3 +75,9 @@ Dherik viu "—" na margem em vários anúncios (relâmpago e outros tipos). Cau
 Comparação de Dherik no MLB3801049271: oferta relâmpago no gestor R$ 172,07 (margem 19,96%) × Central R$ 168,74 (R$ 239,90 − R$ 71,16), recebe R$ 123,37. Segundo caso em que o preço LIGHTNING da API (/seller-promotions/items) não confere com a Central (o primeiro foi o incidente: 180,48 × 164,12). offerTerms passa a recusar LIGHTNING com o motivo "o preço da oferta relâmpago informado pela API não confere com a Central"; a margem não é calculada. Ativação de LIGHTNING já era pela Central.
 /promocoes/analise devolve currentPromotion (oferta started/pending de outra campanha); nos cards cada anúncio mostra "Em promoção: <nome> até DD/MM". No mesmo print, a Central oferecia a continuação "Com redução de tarifas 25/set a 25/out" (R$ 172,71, reduz R$ 1,34).
 Pendente para ofertas relâmpago: verificar se /seller-promotions/candidates/{ref_id} (conferência relâmpago em /diagnostico) traz o preço da Central. Testes 90/90.
+
+## Cards compactos — 25/09/2026
+A pedido de Dherik (cards ocupando muito espaço): todos os cards numa grade única e compacta (mín. 170 px), na ordem das seções; a seção virou etiqueta no card (azul = o gestor ativa, cinza = pela Central); cada card mostra nome (até 2 linhas), "N disp. · M part." e datas; tipo e aviso completos no título ao passar o mouse. O painel da promoção abre abaixo da grade.
+
+## Painel de promoções removido — 25/09/2026
+A pedido de Dherik, com os cards de promoções o "Painel de promoções" deixou de ser necessário: removidos app/promotions-board.tsx, lib/promotion-board.ts, lib/promotion-dates.ts e seus testes. Com ele saiu o alerta "Podem ficar sem promoção" (término em até 3 dias sem continuação); o código fica no histórico do Git (PRs #16 e #17) se for preciso levá-lo para os cards. Testes 80/80.
