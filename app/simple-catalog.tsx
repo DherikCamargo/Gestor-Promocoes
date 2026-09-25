@@ -13,6 +13,7 @@ type Summary={itemId:string;title:string;listingType:string;familyId:string|null
 type Result={data?:Summary;error?:string};
 type Listing={itemId:string;title:string;sku:string;variation:string;familyId:string|null;rows:CatalogRow[]};
 type Group={key:string;familyId:string|null;title:string;items:Listing[]};
+type SaleInfo={state:'promotion'|'regular';price:number;regularPrice:number}|{state:'unknown'};
 type SaveCost=(key:string,cost:number|null)=>Promise<string|null>;
 const money=(n:number,currency:string)=>new Intl.NumberFormat('pt-BR',{style:'currency',currency}).format(n);
 const shortList=(skus:string[])=>skus.length>3?skus.slice(0,2).join(', ')+' e mais '+(skus.length-2)+' SKUs':skus.join(', ');
@@ -124,6 +125,7 @@ export default function SimpleCatalog(){
  const [snapshot,setSnapshot]=useState<Snapshot|null>(null),[query,setQuery]=useState(''),[filter,setFilter]=useState('');
  const [busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[message,setMessage]=useState('');
  const [results,setResults]=useState<Record<string,Result>>({}),[opened,setOpened]=useState<Set<string>>(new Set());
+ const [tab,setTab]=useState<'all'|'regular'>('all'),[sales,setSales]=useState<Record<string,SaleInfo>>({}),[saleScan,setSaleScan]=useState<{done:number;total:number;error?:string}|null>(null);
  const [overrides,setOverrides]=useState<Record<string,number>>({}),[costNotice,setCostNotice]=useState(''),[version,setVersion]=useState(0);
  const alive=useRef(true),lock=useRef(false),queue=useRef<Promise<unknown>>(Promise.resolve()),requested=useRef(new Set<string>()),generation=useRef(0);
  useEffect(()=>{alive.current=true;fetch('/api/mercado-livre/anuncios',{cache:'no-store'}).then(async r=>{const d=await r.json() as Snapshot&{error?:string}|null;if(!r.ok)throw Error(d?.error||'Não foi possível carregar os anúncios.');if(alive.current)setSnapshot(d)}).catch(e=>{if(alive.current)setMessage(e instanceof Error?e.message:'Não foi possível carregar os anúncios.')}).finally(()=>{if(alive.current)setLoading(false)});return()=>{alive.current=false}},[]);
@@ -156,8 +158,26 @@ export default function SimpleCatalog(){
   const ids=search?new Set(search.entries.map(e=>e.itemId)):null,known=new Set(groups.flatMap(g=>g.items.map(i=>i.itemId)));
   // MLB completo fora do catálogo importado continua consultável diretamente.
   const direct:Group[]=(search?.entries??[]).filter(e=>!known.has(e.itemId)).map(e=>({key:e.itemId,familyId:null,title:e.title,items:[{itemId:e.itemId,title:e.title,sku:'',variation:'',familyId:null,rows:[]}]}));
-  return [...direct,...groups.filter(g=>!ids||g.items.some(i=>ids.has(i.itemId)))];
- },[groups,search]);
+  const list=[...direct,...groups.filter(g=>!ids||g.items.some(i=>ids.has(i.itemId)))];
+  if(tab==='all')return list;
+  // Aba "Sem promoção": só anúncios no preço normal; cada variação de família em linha própria.
+  return list.flatMap(g=>g.items.filter(i=>sales[i.itemId]?.state==='regular').map(i=>({key:i.itemId,familyId:null,title:i.title,items:[{...i,familyId:null}]})));
+ },[groups,search,tab,sales]);
+ // Consulta o preço de venda de todos os anúncios, 20 por pedido, para montar a aba "Sem promoção".
+ async function scanSales(){
+  const ids=groups.flatMap(g=>g.items.map(i=>i.itemId));
+  setSales({});setSaleScan({done:0,total:ids.length});
+  for(let i=0;i<ids.length;i+=20){
+   const batch=ids.slice(i,i+20);
+   try{const r=await fetch('/api/mercado-livre/anuncios/sem-promocao?ids='+batch.join(','),{cache:'no-store'});const d=await r.json() as {results?:Record<string,SaleInfo>;error?:string};
+    if(!r.ok||!d.results){if(alive.current)setSaleScan({done:i,total:ids.length,error:d.error||'Consulta de preços indisponível.'});return}
+    if(!alive.current)return;
+    setSales(s=>({...s,...d.results}));setSaleScan({done:Math.min(i+20,ids.length),total:ids.length});
+   }catch{if(alive.current)setSaleScan({done:i,total:ids.length,error:'Sem resposta do servidor.'});return}
+  }
+ }
+ const openTab=(t:'all'|'regular')=>{setTab(t);if(t==='regular'&&!saleScan)void scanSales()};
+ const regularCount=Object.values(sales).filter(x=>x.state==='regular').length;
  async function sync(){
   if(lock.current)return;lock.current=true;setBusy(true);setMessage('Atualizando anúncios…');let current=snapshot;
   try{let action='start';do{const r=await fetch('/api/mercado-livre/anuncios',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,run:current?.run})});const d=await r.json() as Snapshot&{error?:string};if(!r.ok)throw Error(d.error||'Não foi possível atualizar.');current=d;action='next';if(alive.current)setSnapshot(d);}while(current&&!current.done&&alive.current);
@@ -170,6 +190,11 @@ export default function SimpleCatalog(){
  return <section className="panel simple-catalog"><div className="catalog-heading"><h1>Anúncios</h1><Button variant="outline" disabled={busy||loading} onClick={sync}>{busy?'Atualizando…':'Atualizar anúncios'}</Button></div>
  <h2 className="gp-board-title">Promoções do Mercado Livre</h2>
  {boardItems.length>0&&<CampaignCards labels={labels} version={version}/>}
+ <div className="gp-tabs" role="tablist">
+  <button type="button" role="tab" aria-selected={tab==='all'} className="gp-tab" onClick={()=>openTab('all')}>Todos os anúncios</button>
+  <button type="button" role="tab" aria-selected={tab==='regular'} className="gp-tab" onClick={()=>openTab('regular')}>Sem promoção{saleScan?` (${regularCount})`:''}</button>
+ </div>
+ {tab==='regular'&&saleScan&&<p className="gp-note" role="status">{saleScan.error?<span className="gp-danger">{saleScan.error} </span>:null}{saleScan.done<saleScan.total&&!saleScan.error?`Consultando preços… ${saleScan.done} de ${saleScan.total}. `:''}Anúncios vendendo no preço normal, sem promoção ativa.{Object.values(sales).some(x=>x.state==='unknown')?` ${Object.values(sales).filter(x=>x.state==='unknown').length} sem preço informado ficaram de fora.`:''} <Button size="sm" variant="ghost" type="button" disabled={!!saleScan&&saleScan.done<saleScan.total&&!saleScan.error} onClick={()=>void scanSales()}>Consultar de novo</Button></p>}
  <form className="simple-search" onSubmit={e=>{e.preventDefault();setFilter(query.trim());setMessage('')}}><label htmlFor="listing-search">Filtrar por anúncio, MLB ou SKU<Input id="listing-search" placeholder="Todos os anúncios · digite para filtrar" value={query} onChange={e=>{setQuery(e.target.value);if(!e.target.value.trim()){setFilter('');setMessage('')}}}/></label><Button type="submit">Buscar</Button>{filter&&<Button variant="outline" onClick={()=>{setQuery('');setFilter('');setMessage('')}} type="button">Ver todos</Button>}</form>
  {message&&<p role="status">{message}</p>}
  {costNotice&&<p role="status" className="gp-danger">{costNotice}</p>}
@@ -182,6 +207,6 @@ export default function SimpleCatalog(){
   <div className="gp-row gp-head" aria-hidden="true"><span>Anúncio</span><span>Preço normal</span><span>Na promoção</span><span>Tarifa ML</span><span>Subsídio do Mercado Livre</span><span>Frete</span><span>Custo</span></div>
   {visible.map(g=>g.familyId?<FamilyGroup key={g.key} group={g} results={results} open={opened.has(g.key)||!!search} toggle={()=>toggle(g.key)} familyCost={familyCosts[g.key]} {...rowProps}/>:<Row key={g.key} listing={g.items[0]} result={results[g.items[0].itemId]} {...rowProps}/>)}
  </div>}
- {!loading&&!busy&&!search?.message&&!visible.length&&<p>{filter?'Nenhum anúncio encontrado.':'Nenhum anúncio importado. Clique em Atualizar anúncios para carregar sua lista.'}</p>}
+ {!loading&&!busy&&!search?.message&&!visible.length&&<p>{tab==='regular'?(saleScan&&saleScan.done<saleScan.total&&!saleScan.error?'Consultando…':'Nenhum anúncio sem promoção encontrado.'):filter?'Nenhum anúncio encontrado.':'Nenhum anúncio importado. Clique em Atualizar anúncios para carregar sua lista.'}</p>}
  </section>;
 }
