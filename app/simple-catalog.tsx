@@ -169,7 +169,7 @@ export default function SimpleCatalog(){
  const rowProps={request,retry,paused:busy,costs,save,version};
  return <section className="panel simple-catalog"><div className="catalog-heading"><h1>Anúncios</h1><Button variant="outline" disabled={busy||loading} onClick={sync}>{busy?'Atualizando…':'Atualizar anúncios'}</Button></div>
  <h2 className="gp-board-title">Promoções do Mercado Livre</h2>
- {boardItems.length>0&&<CampaignCards labels={labels}/>}
+ {boardItems.length>0&&<CampaignCards labels={labels} version={version}/>}
  <form className="simple-search" onSubmit={e=>{e.preventDefault();setFilter(query.trim());setMessage('')}}><label htmlFor="listing-search">Filtrar por anúncio, MLB ou SKU<Input id="listing-search" placeholder="Todos os anúncios · digite para filtrar" value={query} onChange={e=>{setQuery(e.target.value);if(!e.target.value.trim()){setFilter('');setMessage('')}}}/></label><Button type="submit">Buscar</Button>{filter&&<Button variant="outline" onClick={()=>{setQuery('');setFilter('');setMessage('')}} type="button">Ver todos</Button>}</form>
  {message&&<p role="status">{message}</p>}
  {costNotice&&<p role="status" className="gp-danger">{costNotice}</p>}

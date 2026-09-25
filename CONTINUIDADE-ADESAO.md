@@ -81,3 +81,6 @@ A pedido de Dherik (cards ocupando muito espaço): todos os cards numa grade ún
 
 ## Painel de promoções removido — 25/09/2026
 A pedido de Dherik, com os cards de promoções o "Painel de promoções" deixou de ser necessário: removidos app/promotions-board.tsx, lib/promotion-board.ts, lib/promotion-dates.ts e seus testes. Com ele saiu o alerta "Podem ficar sem promoção" (término em até 3 dias sem continuação); o código fica no histórico do Git (PRs #16 e #17) se for preciso levá-lo para os cards. Testes 80/80.
+
+## Card aberto acompanha regras e custos — 25/09/2026
+Pergunta de Dherik: mudar as regras de margem atualiza as promoções aptas? Sim: toda análise lê as regras e custos do banco na hora, e a adesão revalida no servidor. Faltava o card de promoção já aberto: agora CampaignCards recebe version (incrementada ao salvar regras ou custos) e o painel da promoção é refeito. "Atualizar anúncios" só reimporta a lista de anúncios; não é necessário para regras/custos.
