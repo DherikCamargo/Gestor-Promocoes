@@ -8,7 +8,9 @@ const text=(v:unknown)=>typeof v==='string'&&v?v:null;
 export async function GET(request:Request){
  let owner:string;try{owner=await actor()}catch{return json({error:'Abra o gestor em uma nova aba e entre na sua conta.'},403)}
  try{
-  const id=new URL(request.url).searchParams.get('itemId')??'';
+  const params=new URL(request.url).searchParams,id=params.get('itemId')??'';
+  // Opcional: analisar só uma promoção (cards de promoção), com menos consultas ao Mercado Livre.
+  const only=params.get('promotionId');
   if(!/^MLB\d+$/.test(id))throw new MlError('Informe um MLB válido.',400);
   const api=await mlSession(owner),item=await api.get<Record<string,unknown>>('/items/'+id+'?include_attributes=all');
   if(item.id!==id||String(item.seller_id)!==api.sellerId)throw new MlError('Anúncio não encontrado na conta conectada.',403);
@@ -20,7 +22,8 @@ export async function GET(request:Request){
   ]);
   if(!Array.isArray(raw))throw new MlError('O Mercado Livre retornou um formato de ofertas não reconhecido.',502);
   const rules=settings?.rules??defaultRules;
-  const {cost,offers}=await buildOfferReport(api,item,raw,overrides??{},rules);
+  const selected=only?raw.filter(o=>o&&typeof o==='object'&&(o as {id?:unknown}).id===only):raw;
+  const {cost,offers}=await buildOfferReport(api,item,selected,overrides??{},rules);
   return json({itemId:id,title:text(item.title)??id,currency,cost,rules,rulesEdited:settings?.edited??false,
    warnings:[...(overrides===null?['Custos editados indisponíveis: usando custos padrão.']:[]),...(settings===null?['Regras de margem indisponíveis: usando as regras padrão.']:[])],
    offers,participationEnabled:PARTICIPATION_ENABLED&&overrides!==null&&settings!==null,queriedAt:new Date().toISOString()});

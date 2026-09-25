@@ -8,12 +8,12 @@ import {listingSearch} from '@/lib/listing-search';
 import {listingCost,defaultProducts,type ListingCost} from '@/lib/product-costs';
 import {OfferPanel,RulesPanel,FamilyActivation} from './offer-panel';
 import {PromotionsBoard} from './promotions-board';
+import {CampaignCards} from './campaign-cards';
 type Snapshot={run:string;rows:CatalogRow[];done:boolean};
 type Summary={itemId:string;title:string;listingType:string;familyId:string|null;currency:string;regularPrice:number|null;promotionPrice:number|null;currentPrice:number|null;variationPrices:boolean;freight:number|null;freeShipping:boolean|null;saleFee:SaleFee|null;promotion:ActiveOffer|null};
 type Result={data?:Summary;error?:string};
 type Listing={itemId:string;title:string;sku:string;variation:string;familyId:string|null;rows:CatalogRow[]};
 type Group={key:string;familyId:string|null;title:string;items:Listing[]};
-type Filter='all'|'promotion'|'variation'|'failed'|'nocost';
 type SaveCost=(key:string,cost:number|null)=>Promise<string|null>;
 const money=(n:number,currency:string)=>new Intl.NumberFormat('pt-BR',{style:'currency',currency}).format(n);
 const shortList=(skus:string[])=>skus.length>3?skus.slice(0,2).join(', ')+' e mais '+(skus.length-2)+' SKUs':skus.join(', ');
@@ -122,7 +122,7 @@ function FamilyGroup({group,results,open,toggle,familyCost,...rowProps}:{group:G
 }
 
 export default function SimpleCatalog(){
- const [snapshot,setSnapshot]=useState<Snapshot|null>(null),[query,setQuery]=useState(''),[filter,setFilter]=useState(''),[kind,setKind]=useState<Filter>('all');
+ const [snapshot,setSnapshot]=useState<Snapshot|null>(null),[query,setQuery]=useState(''),[filter,setFilter]=useState('');
  const [busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[message,setMessage]=useState('');
  const [results,setResults]=useState<Record<string,Result>>({}),[opened,setOpened]=useState<Set<string>>(new Set());
  const [overrides,setOverrides]=useState<Record<string,number>>({}),[costNotice,setCostNotice]=useState(''),[version,setVersion]=useState(0);
@@ -150,19 +150,15 @@ export default function SimpleCatalog(){
  const costs=useMemo(()=>Object.fromEntries(groups.flatMap(g=>g.items).map(i=>[i.itemId,listingCost(i.rows,overrides)])),[groups,overrides]);
  // Todos os anúncios importados, um por MLB (variações de família com o nome da opção).
  const boardItems=useMemo(()=>groups.flatMap(g=>g.items.map(l=>({itemId:l.itemId,label:(g.familyId&&l.variation?l.title+' — '+l.variation:l.title)+' · '+l.itemId}))),[groups]);
+ const labels=useMemo(()=>Object.fromEntries(boardItems.map(b=>[b.itemId,b.label])),[boardItems]);
  const familyCosts=useMemo(()=>Object.fromEntries(groups.filter(g=>g.familyId).map(g=>[g.key,listingCost(g.items.flatMap(i=>i.rows),overrides)])),[groups,overrides]);
  const search=useMemo(()=>filter.trim()?listingSearch(filter,snapshot?.rows??[]):null,[filter,snapshot]);
  const visible=useMemo(()=>{
   const ids=search?new Set(search.entries.map(e=>e.itemId)):null,known=new Set(groups.flatMap(g=>g.items.map(i=>i.itemId)));
   // MLB completo fora do catálogo importado continua consultável diretamente.
   const direct:Group[]=(search?.entries??[]).filter(e=>!known.has(e.itemId)).map(e=>({key:e.itemId,familyId:null,title:e.title,items:[{itemId:e.itemId,title:e.title,sku:'',variation:'',familyId:null,rows:[]}]}));
-  return [...direct,...groups.filter(g=>!ids||g.items.some(i=>ids.has(i.itemId)))].filter(g=>kind==='all'
-   ||kind==='variation'&&g.familyId!==null
-   ||kind==='promotion'&&g.items.some(i=>results[i.itemId]?.data?.promotionPrice!=null)
-   ||kind==='failed'&&g.items.some(i=>results[i.itemId]?.error)
-   ||kind==='nocost'&&g.items.some(i=>costs[i.itemId]?.state==='missing'));
- },[groups,search,kind,results,costs]);
- const counts={all:groups.reduce((n,g)=>n+g.items.length,0),promotion:Object.values(results).filter(r=>r.data?.promotionPrice!=null).length,variation:groups.filter(g=>g.familyId).length,failed:Object.values(results).filter(r=>r.error).length,nocost:Object.values(costs).filter(c=>c.state==='missing').length};
+  return [...direct,...groups.filter(g=>!ids||g.items.some(i=>ids.has(i.itemId)))];
+ },[groups,search]);
  async function sync(){
   if(lock.current)return;lock.current=true;setBusy(true);setMessage('Atualizando anúncios…');let current=snapshot;
   try{let action='start';do{const r=await fetch('/api/mercado-livre/anuncios',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,run:current?.run})});const d=await r.json() as Snapshot&{error?:string};if(!r.ok)throw Error(d.error||'Não foi possível atualizar.');current=d;action='next';if(alive.current)setSnapshot(d);}while(current&&!current.done&&alive.current);
@@ -172,10 +168,9 @@ export default function SimpleCatalog(){
  }
  const toggle=(key:string)=>setOpened(s=>{const next=new Set(s);if(!next.delete(key))next.add(key);return next});
  const rowProps={request,retry,paused:busy,costs,save,version};
- const filters:[Filter,string][]=[['all','Todos'],['promotion','Em promoção'],['variation','Preço por variação'],['failed','Com falha'],['nocost','Sem custo']];
  return <section className="panel simple-catalog"><div className="catalog-heading"><h1>Anúncios</h1><Button variant="outline" disabled={busy||loading} onClick={sync}>{busy?'Atualizando…':'Atualizar anúncios'}</Button></div>
- <div className="gp-metrics">{filters.map(([k,label])=><button key={k} type="button" className="gp-metric" aria-pressed={kind===k} onClick={()=>setKind(k)}><span>{label}</span><strong className={(k==='failed'||k==='nocost')&&counts[k]?'gp-danger':''}>{counts[k]}</strong></button>)}</div>
- <p className="gp-note">Em promoção e Com falha contam apenas os anúncios já consultados; a consulta acontece conforme você rola a lista.</p>
+ <h2 className="gp-board-title">Promoções do Mercado Livre</h2>
+ {boardItems.length>0&&<CampaignCards labels={labels}/>}
  <form className="simple-search" onSubmit={e=>{e.preventDefault();setFilter(query.trim());setMessage('')}}><label htmlFor="listing-search">Filtrar por anúncio, MLB ou SKU<Input id="listing-search" placeholder="Todos os anúncios · digite para filtrar" value={query} onChange={e=>{setQuery(e.target.value);if(!e.target.value.trim()){setFilter('');setMessage('')}}}/></label><Button type="submit">Buscar</Button>{filter&&<Button variant="outline" onClick={()=>{setQuery('');setFilter('');setMessage('')}} type="button">Ver todos</Button>}</form>
  {message&&<p role="status">{message}</p>}
  {costNotice&&<p role="status" className="gp-danger">{costNotice}</p>}
@@ -189,6 +184,6 @@ export default function SimpleCatalog(){
   <div className="gp-row gp-head" aria-hidden="true"><span>Anúncio</span><span>Preço normal</span><span>Na promoção</span><span>Tarifa ML</span><span>Subsídio do Mercado Livre</span><span>Frete</span><span>Custo</span></div>
   {visible.map(g=>g.familyId?<FamilyGroup key={g.key} group={g} results={results} open={opened.has(g.key)||!!search} toggle={()=>toggle(g.key)} familyCost={familyCosts[g.key]} {...rowProps}/>:<Row key={g.key} listing={g.items[0]} result={results[g.items[0].itemId]} {...rowProps}/>)}
  </div>}
- {!loading&&!busy&&!search?.message&&!visible.length&&<p>{filter||kind!=='all'?'Nenhum anúncio encontrado.':'Nenhum anúncio importado. Clique em Atualizar anúncios para carregar sua lista.'}</p>}
+ {!loading&&!busy&&!search?.message&&!visible.length&&<p>{filter?'Nenhum anúncio encontrado.':'Nenhum anúncio importado. Clique em Atualizar anúncios para carregar sua lista.'}</p>}
  </section>;
 }
