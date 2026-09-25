@@ -66,10 +66,10 @@ test('preço aplicado diferente do analisado: "divergent" (incidente MLB47970144
  assert.equal((await run(api2)).r.status,'divergent');
 });
 
-test('oferta não aparece depois do pedido: "unverified" após 3 leituras',async()=>{
+test('oferta não aparece depois do pedido: "unverified" após 5 leituras',async()=>{
  const {api,calls}=mockApi({after:[smart]});
  const {r}=await run(api);
- assert.equal(r.status,'unverified');assert.equal(calls.reads,1+3);
+ assert.equal(r.status,'unverified');assert.equal(calls.reads,1+5);
 });
 
 test('anúncio de outra conta ou oferta sumida: recusa sem enviar',async()=>{
@@ -89,11 +89,24 @@ test('regras de ativação e pedido por tipo',()=>{
  assert.throws(()=>participationPayload({id:'P-MLB1',refId:null,type:'DEAL',status:'candidate'}));
 });
 
-test('conferência exige a mesma campanha, tipo e oferta',()=>{
+test('conferência exige a mesma campanha e tipo; o offer_id só desempata',()=>{
  const x={promotionId:'P-MLB18023020',type:'SMART',expectedPrice:112.43,offerId:'OFFER-MLB1-555'};
  assert.equal(verifyParticipation([started(smart)],x).status,'confirmed');
  assert.equal(verifyParticipation([{...started(smart),status:'pending'}],x).state,'pending');
- assert.equal(verifyParticipation([{...started(smart),ref_id:'OFFER-OUTRA'}],x).status,'not_found');
+ // 1º teste real (25/09/2026): offer_id do POST diferente do ref_id da lista, oferta ativa na Central.
+ assert.equal(verifyParticipation([{...started(smart),ref_id:'OFFER-MLB1-13720667431'}],x).status,'confirmed');
+ const duas=[{...started(smart),ref_id:'OFFER-MLB1-555'},{...started(smart),ref_id:'OFFER-OUTRA',price:99}];
+ assert.equal(verifyParticipation(duas,x).price,112.43);
+ assert.equal(verifyParticipation(duas,{...x,offerId:'OFFER-NENHUMA'}).status,'not_found');
  assert.equal(verifyParticipation([{...started(smart),type:'DEAL'}],x).status,'not_found');
+ assert.equal(verifyParticipation([{...started(smart),id:'P-MLB999'}],x).status,'not_found');
  assert.equal(verifyParticipation(null,x).status,'not_found');
+});
+
+test('caso real: offer_id do POST diferente do ref_id da lista é confirmado pelo preço',async()=>{
+ const {api}=mockApi({after:[{...started(smart),ref_id:'OFFER-MLB1-13720667431'}],post:()=>({offer_id:'OFFER-MLB1-177685',price:112.43})});
+ const {r,log}=await run(api);
+ assert.equal(r.status,'confirmed');
+ const detail=JSON.parse(log.at(-1).detail);
+ assert.equal(detail.responseOfferId,'OFFER-MLB1-177685');
 });
