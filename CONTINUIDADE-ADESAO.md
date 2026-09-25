@@ -78,3 +78,6 @@ Pendente para ofertas relâmpago: verificar se /seller-promotions/candidates/{re
 
 ## Cards compactos — 25/09/2026
 A pedido de Dherik (cards ocupando muito espaço): todos os cards numa grade única e compacta (mín. 170 px), na ordem das seções; a seção virou etiqueta no card (azul = o gestor ativa, cinza = pela Central); cada card mostra nome (até 2 linhas), "N disp. · M part." e datas; tipo e aviso completos no título ao passar o mouse. O painel da promoção abre abaixo da grade.
+
+## Painel de promoções removido — 25/09/2026
+A pedido de Dherik, com os cards de promoções o "Painel de promoções" deixou de ser necessário: removidos app/promotions-board.tsx, lib/promotion-board.ts, lib/promotion-dates.ts e seus testes. Com ele saiu o alerta "Podem ficar sem promoção" (término em até 3 dias sem continuação); o código fica no histórico do Git (PRs #16 e #17) se for preciso levá-lo para os cards. Testes 80/80.
