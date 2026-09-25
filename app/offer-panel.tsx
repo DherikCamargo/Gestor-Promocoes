@@ -15,7 +15,7 @@ export const outcomeText=(o:Outcome)=>o.status==='confirmed'?`Ativada: ${o.state
 export const outcomeTone=(o:Outcome)=>o.status==='confirmed'?'gp-ok':o.status==='divergent'||o.status==='failed'?'gp-bad':'gp-warn';
 export const brl=(n:number)=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(n);
 export const pct=(n:number)=>(n*100).toLocaleString('pt-BR',{maximumFractionDigits:2})+'%';
-export const typeNames:Record<string,string>={SMART:'Co-participação',MARKETPLACE_CAMPAIGN:'Co-participação',PRICE_MATCHING:'Preços competitivos',DEAL:'Campanha tradicional',PRICE_DISCOUNT:'Desconto individual',LIGHTNING:'Oferta relâmpago',DOD:'Oferta do dia',PRE_NEGOTIATED:'Desconto pré-acordado',VOLUME:'Desconto por quantidade',SELLER_CAMPAIGN:'Campanha do vendedor',SELLER_COUPON_CAMPAIGN:'Cupom do vendedor'};
+export const typeNames:Record<string,string>={SMART:'Co-participação',MARKETPLACE_CAMPAIGN:'Co-participação',PRICE_MATCHING:'Preços competitivos',DEAL:'Campanha tradicional',PRICE_DISCOUNT:'Desconto individual',LIGHTNING:'Oferta relâmpago',DOD:'Oferta do dia',PRE_NEGOTIATED:'Desconto pré-acordado',VOLUME:'Desconto por quantidade',SELLER_CAMPAIGN:'Campanha do vendedor',SELLER_COUPON_CAMPAIGN:'Cupom do vendedor',UNHEALTHY_STOCK:'Liquidação de estoque Full',BANK:'Desconto no Pix'};
 const statusNames:Record<string,string>={candidate:'Disponível',pending:'Programada',started:'Participando'};
 const verdicts={approved:['Aprovada','gp-ok'],attention:['Atenção','gp-warn'],not_recommended:['Não recomendada','gp-bad'],missing:['Faltam dados','gp-neutral']} as const;
 const date=(s:string|null)=>s?new Date(s).toLocaleDateString('pt-BR',{timeZone:'America/Sao_Paulo'}):null;

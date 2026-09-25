@@ -2,6 +2,7 @@
 import {useEffect,useMemo,useState} from 'react';
 import {Button} from '@/components/ui/button';
 import {activate,outcomeText,outcomeTone,brl,pct,typeNames,type Outcome} from './offer-panel';
+import {groupCampaigns} from '@/lib/campaign-groups';
 type Campaign={id:string;type:string;status:string;name:string;start:string|null;finish:string|null;deadline:string|null};
 type CampaignItem={itemId:string;status:string;price:number|null};
 type Counts={items:CampaignItem[];complete:boolean}|{error:string};
@@ -10,6 +11,8 @@ type Row={itemId:string;label:string;refId:string|null;status:string;price:numbe
 // Tipos que o gestor ativa (preço definido pelo Mercado Livre); os demais ficam para a Central.
 const activatable=new Set(['SMART','PRICE_MATCHING','MARKETPLACE_CAMPAIGN']);
 const fmt=(s:string|null)=>s?new Date(s).toLocaleDateString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit'}):null;
+// Sem nome na API (ex.: relâmpago), o nome é o próprio tipo: mostra o tipo traduzido.
+const displayName=(c:Campaign)=>c.name===c.type?typeNames[c.type]??c.type:c.name;
 const verdict={approved:'Aprovada',attention:'Atenção',not_recommended:'Não recomendada',missing:'Faltam dados'} as const;
 
 // Cards com todas as promoções para as quais o vendedor foi convidado.
@@ -37,18 +40,23 @@ export function CampaignCards({labels}:{labels:Record<string,string>}){
  },[attempt]);
  if(!state)return <p className="gp-note" role="status">Carregando promoções do Mercado Livre…</p>;
  if(state.error)return <p className="gp-note gp-danger" role="alert">{state.error} <Button size="sm" variant="outline" onClick={()=>{setState(null);setCounts({});setAttempt(a=>a+1)}}>Tentar de novo</Button></p>;
- const campaigns=[...state.campaigns!].sort((a,b)=>{const n=(c:Campaign)=>{const v=counts[c.id];return v&&'items' in v?v.items.filter(i=>i.status==='candidate').length:-1};return n(b)-n(a)});
- const current=campaigns.find(c=>c.id===open);
+ const available=(c:Campaign)=>{const v=counts[c.id];return v&&'items' in v?v.items.filter(i=>i.status==='candidate').length:-1};
+ const groups=groupCampaigns([...state.campaigns!].sort((a,b)=>available(b)-available(a)||a.name.localeCompare(b.name)));
+ const card=(c:Campaign)=>{const v=counts[c.id],cand=v&&'items' in v?v.items.filter(i=>i.status==='candidate').length:null,part=v&&'items' in v?v.items.filter(i=>i.status!=='candidate').length:null;
+  return <button key={c.id} type="button" className="gp-campaign-card" aria-pressed={open===c.id} onClick={()=>setOpen(o=>o===c.id?null:c.id)}>
+   <strong>{displayName(c)}</strong>
+   <span className="gp-note">{typeNames[c.type]??c.type}{!activatable.has(c.type)?' · ativar pela Central':''}</span>
+   <span className="gp-note">{[fmt(c.start)&&`${fmt(c.start)} a ${fmt(c.finish)??'?'}`,fmt(c.deadline)&&`aderir até ${fmt(c.deadline)}`].filter(Boolean).join(' · ')||'sem datas informadas'}</span>
+   <span className="gp-campaign-counts">{v===undefined?'contando…':'error' in v?v.error:<><b>{cand}</b> disponíve{cand===1?'l':'is'} · <b>{part}</b> participando{v.complete?'':' (parcial)'}</>}</span>
+  </button>};
  return <div className="gp-campaigns">
-  {!campaigns.length?<p className="gp-note">Nenhuma promoção disponível no Mercado Livre agora.</p>
-   :<div className="gp-campaign-grid">{campaigns.map(c=>{const v=counts[c.id],cand=v&&'items' in v?v.items.filter(i=>i.status==='candidate').length:null,part=v&&'items' in v?v.items.filter(i=>i.status!=='candidate').length:null;
-    return <button key={c.id} type="button" className="gp-campaign-card" aria-pressed={open===c.id} onClick={()=>setOpen(o=>o===c.id?null:c.id)}>
-     <strong>{c.name}</strong>
-     <span className="gp-note">{typeNames[c.type]??c.type}{!activatable.has(c.type)?' · ativar pela Central':''}</span>
-     <span className="gp-note">{[fmt(c.start)&&`${fmt(c.start)} a ${fmt(c.finish)??'?'}`,fmt(c.deadline)&&`aderir até ${fmt(c.deadline)}`].filter(Boolean).join(' · ')||'sem datas informadas'}</span>
-     <span className="gp-campaign-counts">{v===undefined?'contando…':'error' in v?v.error:<><b>{cand}</b> disponíve{cand===1?'l':'is'} · <b>{part}</b> participando{v.complete?'':' (parcial)'}</>}</span>
-    </button>})}</div>}
-  {current&&<CampaignDetail key={current.id} campaign={current} counts={counts[current.id]} labels={labels} enabled={!!state.enabled} onClose={()=>setOpen(null)}/>}
+  {!groups.length?<p className="gp-note">Nenhuma promoção disponível no Mercado Livre agora.</p>
+   :groups.map(g=>{const total=g.items.reduce((n,c)=>n+Math.max(0,available(c)),0),current=g.items.find(c=>c.id===open);
+    return <section key={g.key} className="gp-campaign-group" aria-label={g.title}>
+     <div className="gp-campaign-group-head"><strong>{g.title}</strong><span className="gp-note">{g.subtitle}</span><span className="gp-note">{g.items.length} promoç{g.items.length===1?'ão':'ões'} · {total} anúncio{total===1?'':'s'} disponíve{total===1?'l':'is'}</span></div>
+     <div className="gp-campaign-grid">{g.items.map(card)}</div>
+     {current&&<CampaignDetail key={current.id} campaign={{...current,name:displayName(current)}} counts={counts[current.id]} labels={labels} enabled={!!state.enabled} onClose={()=>setOpen(null)}/>}
+    </section>})}
  </div>;
 }
 
