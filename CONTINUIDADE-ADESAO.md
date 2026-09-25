@@ -63,3 +63,7 @@ Pedido de Dherik: tirar os cards de filtro da lista (Todos, Em promoção, Preç
 - A lista de anúncios perdeu os cards de filtro; a busca continua. O Painel de promoções (datas e alertas) continua.
 - Nomes dos cards são os da API (ex.: "Set26 | Top Sellers", "10.10"); textos como "Aumente sua competitividade" podem ser rótulos da Central, não o nome da campanha — confirmar após publicar.
 - Testes: 86/86 (4 novos em tests/campaigns.test.mjs). Sem teste visual; sem consulta real nesta etapa.
+
+## Cards agrupados como na Central — 25/09/2026
+Comparação de Dherik com "Tarefas e recomendações" da Central. Cards agora em seções (lib/campaign-groups.ts, grupo deduzido pelo tipo, pois a API não informa o card da Central): Impulsione seus descontos (SMART, MARKETPLACE_CAMPAIGN) · Aumente sua competitividade (PRICE_MATCHING) · Impulsione suas vendas do Full (UNHEALTHY_STOCK) · Participe das campanhas (DEAL, PRICE_DISCOUNT, PRE_NEGOTIATED, VOLUME, SELLER_CAMPAIGN) · Participe da oferta relâmpago (LIGHTNING, DOD) · Cupons e Pix (SELLER_COUPON_CAMPAIGN, BANK) · Outras. Dentro da seção, mais disponíveis primeiro. Cabeçalho com total de promoções e de anúncios disponíveis; o painel da promoção abre dentro da seção. Tipos traduzidos: UNHEALTHY_STOCK, BANK; campanha sem nome (relâmpago) mostra o tipo traduzido.
+Observação: as contagens da Central ("34 eleg." em Aumente sua competitividade) não batem com as da API (14 em preços competitivos); a Central pode juntar tipos, contar variações ou anúncios pausados, e a API lista só anúncios ativos. Testes 88/88.
