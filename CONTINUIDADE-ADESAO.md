@@ -51,3 +51,6 @@ Pedido de Dherik: ver as datas das promoções para que o anúncio não fique ne
 - Painel: métrica "Podem ficar sem promoção"; seção de alerta com a data de término/início e as próximas opções (período, preço, margem); período em cada oferta apta; "Já em promoção" com período e "coberto até".
 - Os anúncios em promoção continuam fora da ativação em lote: não está confirmado se aderir a outra campanha com uma ativa programa a nova para depois ou troca a atual. Próximo passo sugerido: testar com um único anúncio que esteja no alerta.
 - Testes: 82/82 (6 novos em tests/promotion-dates.test.mjs).
+
+## Ajuste — 25/09/2026
+A pedido de Dherik, a seção "Sem promoção" deixou de repetir os anúncios que já aparecem em "Aptas para ativar": agora é "Sem promoção e sem oferta apta", só com os que não têm nenhuma oferta apta e o motivo.
