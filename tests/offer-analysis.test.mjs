@@ -65,3 +65,9 @@ test('regras só são aceitas completas e dentro dos limites',()=>{
  assert.equal(parseRules(incomplete),null);
  assert.equal(parseRules({...defaultRules,taxRate:'0.09'}),null);
 });
+
+test('preço contraditório explica o motivo (caso do incidente: 180,48 acima do máximo 170,99)',()=>{
+ const r=offerTerms({type:'LIGHTNING',status:'candidate',price:180.48,max_discounted_price:170.99});
+ assert.equal(r.ok,false);
+ assert.equal(r.reason,'preço contraditório do Mercado Livre (preço da oferta acima do máximo informado). Confira na Central.');
+});

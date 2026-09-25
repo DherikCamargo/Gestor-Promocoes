@@ -19,7 +19,8 @@ export type OfferTerms={ok:true;price:number;priceSource:'offer'|'suggested';mlS
 export function offerTerms(o:Record<string,unknown>):OfferTerms{
  if(o.type==='SELLER_COUPON_CAMPAIGN')return {ok:false,reason:'Cupom do vendedor: o desconto depende do cupom, não há preço para analisar.'};
  const issues=promotionPriceIssues(o);
- if(issues.length)return {ok:false,reason:issues.join(' ')};
+ // Preço fora do mínimo/máximo do próprio ML (padrão do incidente LIGHTNING 180,48 > 170,99): não calcula.
+ if(issues.length)return {ok:false,reason:'preço contraditório do Mercado Livre ('+issues.map(i=>i.replace(/\.$/,'').toLowerCase()).join('; ')+'). Confira na Central.'};
  const price=promotionPrice(o);
  if(price===null)return {ok:false,reason:'O Mercado Livre não informou preço nem sugestão para esta oferta.'};
  const b=offerBenefits(o);

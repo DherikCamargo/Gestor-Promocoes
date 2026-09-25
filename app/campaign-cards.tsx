@@ -7,7 +7,7 @@ type Campaign={id:string;type:string;status:string;name:string;start:string|null
 type CampaignItem={itemId:string;status:string;price:number|null};
 type Counts={items:CampaignItem[];complete:boolean}|{error:string};
 type Analysis={status:'approved'|'attention'|'not_recommended'|'missing';price:number;margin:number|null;profit:number|null;missing:string[]};
-type Row={itemId:string;label:string;refId:string|null;status:string;price:number|null;analysis?:Analysis;blockReason:string|null;error?:string};
+type Row={itemId:string;label:string;refId:string|null;status:string;price:number|null;analysis?:Analysis;reason?:string;blockReason:string|null;error?:string};
 // Tipos que o gestor ativa (preço definido pelo Mercado Livre); os demais ficam para a Central.
 const activatable=new Set(['SMART','PRICE_MATCHING','MARKETPLACE_CAMPAIGN']);
 const fmt=(s:string|null)=>s?new Date(s).toLocaleDateString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit'}):null;
@@ -76,7 +76,7 @@ function CampaignDetail({campaign:c,counts,labels,enabled,onClose}:{campaign:Cam
     const o=d.offers?.find(x=>x.id===c.id&&x.status==='candidate');
     row=!r.ok?{itemId:it.itemId,label:labels[it.itemId]??it.itemId,refId:null,status:'candidate',price:it.price,blockReason:null,error:d.error||'Análise indisponível.'}
      :!o?{itemId:it.itemId,label:labels[it.itemId]??it.itemId,refId:null,status:'candidate',price:it.price,blockReason:'A oferta não aparece mais para este anúncio.'}
-     :{itemId:it.itemId,label:labels[it.itemId]??it.itemId,refId:o.refId??o.id,status:o.status,price:o.analysis?.price??o.price??it.price,analysis:o.analysis,blockReason:o.blockReason??(o.analysis?null:o.reason??'Sem análise.')};
+     :{itemId:it.itemId,label:labels[it.itemId]??it.itemId,refId:o.refId??o.id,status:o.status,price:o.analysis?.price??o.price??it.price,analysis:o.analysis,reason:o.reason,blockReason:o.blockReason??(o.analysis?null:o.reason??'Sem análise.')};
    }catch{row={itemId:it.itemId,label:labels[it.itemId]??it.itemId,refId:null,status:'candidate',price:it.price,blockReason:null,error:'Sem resposta.'}}
    if(!active)return;
    n++;setRows(s=>({...s,[it.itemId]:row}));setDone(n);
@@ -107,7 +107,7 @@ function CampaignDetail({campaign:c,counts,labels,enabled,onClose}:{campaign:Cam
     <input type="checkbox" aria-label={'Selecionar '+r.label} checked={selected.has(r.itemId)&&!o} disabled={!ok||!!o||running||!enabled||!activatable.has(c.type)} onChange={()=>setSelected(s=>{const n=new Set(s);if(!n.delete(r.itemId))n.add(r.itemId);return n})}/>
     <span>{r.label}</span>
     <span>{r.price!==null?brl(r.price):'—'}</span>
-    <span>{r.analysis?.margin!=null?`margem ${pct(r.analysis.margin)}`:r.analysis?verdict[r.analysis.status]:'—'}</span>
+    <span>{r.analysis?.margin!=null?`margem ${pct(r.analysis.margin)}`:r.analysis?(r.analysis.status==='missing'?<span className="gp-note">Faltam dados: {r.analysis.missing.join(', ')}</span>:verdict[r.analysis.status]):r.reason?<span className="gp-note gp-danger">Sem margem: {r.reason}</span>:'—'}</span>
     <span className={o?'gp-verdict '+outcomeTone(o):ok?'gp-verdict gp-ok':'gp-note'}>{o?outcomeText(o):r.error??r.blockReason??'Apta'}</span>
    </li>})}</ul>}
    {enabled&&activatable.has(c.type)&&!analyzing&&(apt.length===0?<p className="gp-note">Nenhum anúncio apto para ativar nesta promoção.</p>
