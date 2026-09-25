@@ -91,3 +91,10 @@ Contratos (documentação 09/06/2026): DEAL `{promotion_id, promotion_type:'DEAL
 - Rotas: /promocoes/analise aceita `price` (com promotionId = id, ref_id ou PRICE_DISCOUNT) para a prévia; /promocoes/participar aceita `price` e `days` (1–14).
 - Tela: `PriceChooser` (campo de preço com o sugerido, faixa aceita, desconto e duração no individual, prévia da margem no servidor a cada alteração com espera de 0,6 s, "Ativar por R$ X" só com margem aprovada, confirmação). No painel Promoções do anúncio e nos cards (botão "Escolher preço" por anúncio; sem ativação em lote nesses tipos). Etiqueta azul também para esses tipos.
 - Testes 86/86 (8 novos). Sem teste visual; nenhuma adesão real com preço escolhido ainda — primeiro uso em um anúncio, conferindo na Central.
+
+## Aba "Sem promoção" — 25/09/2026
+Pedido de Dherik: aba com anúncios sem promoção, só no preço bruto.
+- lib/sale-state.ts: `saleState(sale_price)` = promotion (regular_amount > amount), regular (preço normal) ou unknown (sem preço: nunca contado como sem promoção).
+- /api/mercado-livre/anuncios/sem-promocao?ids= (até 20 MLBs, cinco consultas por vez, só leitura).
+- Lista com abas "Todos os anúncios" e "Sem promoção (N)": ao abrir a aba, consulta o sale_price de todos os anúncios em lotes de 20 e mostra os que vendem no preço normal (variações de família em linhas próprias), com a mesma linha da lista (preço, tarifa, frete, custo e botão Promoções). "Consultar de novo" refaz; anúncios sem preço informado são contados à parte.
+- Testes 83/83 (3 novos).
