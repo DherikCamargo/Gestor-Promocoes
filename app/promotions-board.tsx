@@ -4,6 +4,9 @@ import {Button} from '@/components/ui/button';
 import {classifyListing,type ListingClass} from '@/lib/promotion-board';
 import {activate,outcomeText,outcomeTone,brl,pct,typeNames,type Outcome} from './offer-panel';
 type BoardItem={itemId:string;label:string};
+const fmt=(t:number|null)=>t===null?null:new Date(t).toLocaleDateString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit'});
+const period=(p:{start:number|null;finish:number|null})=>p.start===null&&p.finish===null?'sem datas informadas':`${fmt(p.start)??'?'} a ${fmt(p.finish)??'sem fim informado'}`;
+const inDays=(d:number)=>d===0?'hoje':d===1?'amanhã':`em ${d} dias`;
 type Entry={item:BoardItem;cls?:ListingClass;error?:string};
 type Report={offers:Parameters<typeof classifyListing>[0];participationEnabled:boolean;error?:string};
 
@@ -49,6 +52,9 @@ export function PromotionsBoard({items}:{items:BoardItem[]}){
  }
  const all=Object.values(entries),available=all.filter(e=>e.cls?.status==='available'),none=all.filter(e=>e.cls?.status==='none');
  const active=all.filter(e=>e.cls?.status==='active'),failed=all.filter(e=>e.error);
+ // Em promoção, mas prestes a ficar sem: termina em até 3 dias sem continuação, ou só começa no futuro.
+ const atRisk=active.filter(e=>(e.cls as Extract<ListingClass,{status:'active'}>).active.coverage.state!=='ok')
+  .sort((a,b)=>{const u=(e:Entry)=>{const c=(e.cls as Extract<ListingClass,{status:'active'}>).active.coverage;return c.state==='ok'?Infinity:c.until??Infinity};return u(a)-u(b)});
  const pending=Object.keys(selected).filter(id=>!outcomes[id]);
  const toggle=(itemId:string,refId:string)=>setSelected(s=>{const n={...s};if(n[itemId]===refId)delete n[itemId];else n[itemId]=refId;return n});
  return <div className="gp-board">
@@ -64,7 +70,19 @@ export function PromotionsBoard({items}:{items:BoardItem[]}){
     <div className="gp-metric"><span>Sem promoção, com oferta apta</span><strong>{available.length}</strong></div>
     <div className="gp-metric"><span>Sem promoção, sem oferta apta</span><strong>{none.length}</strong></div>
     <div className="gp-metric"><span>Já em promoção</span><strong>{active.length}</strong></div>
+    <div className="gp-metric"><span>Podem ficar sem promoção</span><strong className={atRisk.length?'gp-danger':''}>{atRisk.length}</strong></div>
    </div>
+
+   {atRisk.length>0&&<>
+    <h2 className="gp-board-title">Atenção: podem ficar sem promoção ({atRisk.length})</h2>
+    <p className="gp-note">Promoção atual termina em até 3 dias sem outra programada logo depois, ou a única promoção só começa no futuro. As próximas opções são ofertas aptas que continuam depois do fim da atual.</p>
+    <div className="gp-board-table">{atRisk.map(e=>{const a=(e.cls as Extract<ListingClass,{status:'active'}>).active,c=a.coverage;return <div key={e.item.itemId} className="gp-board-listing">
+     <strong>{e.item.label}</strong>
+     <p className="gp-verdict gp-warn">{c.state==='gap'?`${a.name} está programada e só começa ${fmt(c.until)} (${inDays(c.days)}): sem promoção até lá.`:c.state==='ending'?`${a.name} termina ${fmt(c.until)} (${inDays(c.days)}) e não há outra programada depois.`:''}</p>
+     {a.next.length?<ul className="gp-family-rows">{a.next.map(n=><li key={n.refId}><span>Próxima opção: {n.name}</span><span>{period(n)}</span><span>{brl(n.price)} · margem {pct(n.margin)}</span></li>)}</ul>
+      :<p className="gp-note">Nenhuma oferta apta que continue depois do fim da atual. Confira as ofertas na Central.</p>}
+    </div>})}</div>
+   </>}
    {failed.length>0&&<p className="gp-note gp-danger">Sem análise ({failed.length}): {failed.map(e=>e.item.label).join('; ')}.</p>}
 
    <h2 className="gp-board-title">Aptas para ativar ({available.length} anúncios)</h2>
@@ -80,7 +98,7 @@ export function PromotionsBoard({items}:{items:BoardItem[]}){
       {cls.apt.map(a=><label key={a.refId} className="gp-board-offer">
        <input type="checkbox" checked={selected[e.item.itemId]===a.refId} disabled={running||!!o} onChange={()=>toggle(e.item.itemId,a.refId)}/>
        <span>{a.name}<span className="gp-note">{typeNames[a.type??'']??a.type}</span></span>
-       <span>{brl(a.price)}</span><span>margem {pct(a.margin)}</span><span>lucro {brl(a.profit)}</span>
+       <span>{brl(a.price)}<span className="gp-note">{period(a)}</span></span><span>margem {pct(a.margin)}</span><span>lucro {brl(a.profit)}</span>
       </label>)}
       {o&&<p className={'gp-verdict '+outcomeTone(o)} role="status">{outcomeText(o)}</p>}
      </div>})}
@@ -96,7 +114,7 @@ export function PromotionsBoard({items}:{items:BoardItem[]}){
    {!(available.length+none.length)?<p className="gp-note">{scan.running?'Procurando…':'Todos os anúncios analisados estão em promoção.'}</p>
     :<ul className="gp-family-rows">{[...available,...none].map(e=><li key={e.item.itemId}><span>{e.item.label}</span><span className={e.cls?.status==='available'?'gp-verdict gp-ok':'gp-note'}>{e.cls?.status==='available'?`${e.cls.apt.length} oferta${e.cls.apt.length>1?'s':''} apta${e.cls.apt.length>1?'s':''} (acima)`:(e.cls as Extract<ListingClass,{status:'none'}>).reason}</span></li>)}</ul>}
 
-   {active.length>0&&<details className="gp-calc"><summary>Já em promoção ({active.length})</summary><ul className="gp-family-rows">{active.map(e=>{const a=(e.cls as Extract<ListingClass,{status:'active'}>).active;return <li key={e.item.itemId}><span>{e.item.label}</span><span>{a.name}</span><span>{a.price!==null?brl(a.price):'—'}</span><span className="gp-note">{a.status==='pending'?'programada':'ativa'}</span></li>})}</ul></details>}
+   {active.length>0&&<details className="gp-calc"><summary>Já em promoção ({active.length})</summary><ul className="gp-family-rows">{active.map(e=>{const a=(e.cls as Extract<ListingClass,{status:'active'}>).active;return <li key={e.item.itemId}><span>{e.item.label}</span><span>{a.name}<span className="gp-note">{period(a)}</span></span><span>{a.price!==null?brl(a.price):'—'}</span><span className="gp-note">{a.status==='pending'?'programada':'ativa'}{a.coverage.state==='ok'&&a.coverage.until!==null?` · coberto até ${fmt(a.coverage.until)}`:a.coverage.state==='ok'?' · sem fim informado':''}</span></li>})}</ul></details>}
   </>}
  </div>;
 }

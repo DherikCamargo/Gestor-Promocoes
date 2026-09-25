@@ -43,3 +43,11 @@ Pedido: lista única do que ativar (opção B) e mostrar anúncios sem promoçã
 - Nada muda no servidor: a ativação em lote usa /promocoes/participar, que revalida cada anúncio.
 - Testes: 76/76 (4 novos em tests/promotion-board.test.mjs). Sem teste visual (Windows). Nenhuma adesão real nesta etapa de desenvolvimento.
 - Limite: com muitos anúncios a análise completa leva minutos (≈ 2 consultas simultâneas; cada uma faz várias chamadas ao ML).
+
+## Datas das promoções no painel — 25/09/2026
+Pedido de Dherik: ver as datas das promoções para que o anúncio não fique nenhum período sem promoção.
+- lib/promotion-dates.ts: `parseMlDate` trata os três formatos vistos na API (com fuso, UTC "Z" e sem fuso = Brasília -03:00); `coverage` classifica a promoção atual: `ending` (termina em até 3 dias sem outra programada que comece até 1 dia depois do fim e vá além dele), `gap` (a única promoção é programada e começa no futuro) ou `ok` (com "coberto até"); `continuesAfter` para sugerir a próxima oferta.
+- lib/promotion-board.ts: datas (ms) nas ofertas aptas e na promoção atual; `active.coverage` e `active.next` (aptas que continuam depois do fim da atual, maior margem primeiro).
+- Painel: métrica "Podem ficar sem promoção"; seção de alerta com a data de término/início e as próximas opções (período, preço, margem); período em cada oferta apta; "Já em promoção" com período e "coberto até".
+- Os anúncios em promoção continuam fora da ativação em lote: não está confirmado se aderir a outra campanha com uma ativa programa a nova para depois ou troca a atual. Próximo passo sugerido: testar com um único anúncio que esteja no alerta.
+- Testes: 82/82 (6 novos em tests/promotion-dates.test.mjs).
