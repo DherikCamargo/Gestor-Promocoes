@@ -23,10 +23,13 @@ export async function GET(request:Request){
   if(!Array.isArray(raw))throw new MlError('O Mercado Livre retornou um formato de ofertas não reconhecido.',502);
   const rules=settings?.rules??defaultRules;
   const selected=only?raw.filter(o=>o&&typeof o==='object'&&(o as {id?:unknown}).id===only):raw;
+  // Promoção em que o anúncio já está (ativa ou programada), para avisar nos cards de outras promoções.
+  const current=raw.map(o=>(o&&typeof o==='object'?o:{}) as Record<string,unknown>).find(o=>(o.status==='started'||o.status==='pending')&&o.id!==only);
+  const currentPromotion=current?{name:text(current.name)??text(current.type),type:text(current.type),status:String(current.status),finish:text(current.finish_date)??text(current.end_date)}:null;
   const {cost,offers}=await buildOfferReport(api,item,selected,overrides??{},rules);
   return json({itemId:id,title:text(item.title)??id,currency,cost,rules,rulesEdited:settings?.edited??false,
    warnings:[...(overrides===null?['Custos editados indisponíveis: usando custos padrão.']:[]),...(settings===null?['Regras de margem indisponíveis: usando as regras padrão.']:[])],
-   offers,participationEnabled:PARTICIPATION_ENABLED&&overrides!==null&&settings!==null,queriedAt:new Date().toISOString()});
+   offers,currentPromotion,participationEnabled:PARTICIPATION_ENABLED&&overrides!==null&&settings!==null,queriedAt:new Date().toISOString()});
  }catch(e){
   if(e instanceof MlError&&/HTTP 404/.test(e.message))return json({error:'Anúncio não encontrado. Confira o MLB.'},404);
   return json({error:e instanceof MlError?e.message:'Não foi possível analisar as promoções deste anúncio.'},e instanceof MlError?e.status:503);

@@ -66,8 +66,15 @@ test('regras só são aceitas completas e dentro dos limites',()=>{
  assert.equal(parseRules({...defaultRules,taxRate:'0.09'}),null);
 });
 
-test('preço contraditório explica o motivo (caso do incidente: 180,48 acima do máximo 170,99)',()=>{
- const r=offerTerms({type:'LIGHTNING',status:'candidate',price:180.48,max_discounted_price:170.99});
+test('preço contraditório explica o motivo (valores do incidente: 180,48 acima do máximo 170,99)',()=>{
+ const r=offerTerms({type:'SMART',status:'candidate',price:180.48,max_discounted_price:170.99});
  assert.equal(r.ok,false);
  assert.equal(r.reason,'preço contraditório do Mercado Livre (preço da oferta acima do máximo informado). Confira na Central.');
+});
+
+test('oferta relâmpago não tem margem calculada: preço da API não confere com a Central',()=>{
+ // 25/09/2026, MLB3801049271: API 172,07 × Central 168,74 (sem contradição de limites).
+ const r=offerTerms({type:'LIGHTNING',status:'candidate',price:172.07,original_price:239.9});
+ assert.equal(r.ok,false);
+ assert.match(r.reason,/relâmpago.*não confere com a Central/);
 });
