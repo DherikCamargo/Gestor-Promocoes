@@ -7,7 +7,7 @@ type Campaign={id:string;type:string;status:string;name:string;start:string|null
 type CampaignItem={itemId:string;status:string;price:number|null};
 type Counts={items:CampaignItem[];complete:boolean}|{error:string};
 type Analysis={status:'approved'|'attention'|'not_recommended'|'missing';price:number;margin:number|null;profit:number|null;missing:string[]};
-type Row={itemId:string;label:string;refId:string|null;status:string;price:number|null;analysis?:Analysis;reason?:string;blockReason:string|null;error?:string};
+type Row={itemId:string;label:string;refId:string|null;status:string;price:number|null;analysis?:Analysis;reason?:string;blockReason:string|null;error?:string;current?:{name:string|null;status:string;finish:string|null}|null};
 // Tipos que o gestor ativa (preço definido pelo Mercado Livre); os demais ficam para a Central.
 const activatable=new Set(['SMART','PRICE_MATCHING','MARKETPLACE_CAMPAIGN']);
 const fmt=(s:string|null)=>s?new Date(s).toLocaleDateString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit'}):null;
@@ -72,11 +72,11 @@ function CampaignDetail({campaign:c,counts,labels,enabled,onClose}:{campaign:Cam
  useEffect(()=>{
   let active=true;const queue=[...candidates];let n=0;
   const worker=async()=>{while(queue.length&&active){const it=queue.shift()!;let row:Row;
-   try{const r=await fetch('/api/mercado-livre/promocoes/analise?'+new URLSearchParams({itemId:it.itemId,promotionId:c.id}),{cache:'no-store'});const d=await r.json() as {offers?:{id:string|null;refId:string|null;status:string;price?:number;analysis?:Analysis;blockReason:string|null;reason?:string}[];error?:string};
+   try{const r=await fetch('/api/mercado-livre/promocoes/analise?'+new URLSearchParams({itemId:it.itemId,promotionId:c.id}),{cache:'no-store'});const d=await r.json() as {offers?:{id:string|null;refId:string|null;status:string;price?:number;analysis?:Analysis;blockReason:string|null;reason?:string}[];currentPromotion?:{name:string|null;status:string;finish:string|null}|null;error?:string};
     const o=d.offers?.find(x=>x.id===c.id&&x.status==='candidate');
     row=!r.ok?{itemId:it.itemId,label:labels[it.itemId]??it.itemId,refId:null,status:'candidate',price:it.price,blockReason:null,error:d.error||'Análise indisponível.'}
      :!o?{itemId:it.itemId,label:labels[it.itemId]??it.itemId,refId:null,status:'candidate',price:it.price,blockReason:'A oferta não aparece mais para este anúncio.'}
-     :{itemId:it.itemId,label:labels[it.itemId]??it.itemId,refId:o.refId??o.id,status:o.status,price:o.analysis?.price??o.price??it.price,analysis:o.analysis,reason:o.reason,blockReason:o.blockReason??(o.analysis?null:o.reason??'Sem análise.')};
+     :{itemId:it.itemId,label:labels[it.itemId]??it.itemId,refId:o.refId??o.id,status:o.status,price:o.analysis?.price??o.price??it.price,analysis:o.analysis,reason:o.reason,current:d.currentPromotion,blockReason:o.blockReason??(o.analysis?null:o.reason??'Sem análise.')};
    }catch{row={itemId:it.itemId,label:labels[it.itemId]??it.itemId,refId:null,status:'candidate',price:it.price,blockReason:null,error:'Sem resposta.'}}
    if(!active)return;
    n++;setRows(s=>({...s,[it.itemId]:row}));setDone(n);
@@ -105,7 +105,7 @@ function CampaignDetail({campaign:c,counts,labels,enabled,onClose}:{campaign:Cam
    {!activatable.has(c.type)&&<p className="gp-note">Neste tipo você escolhe o preço ou a adesão é irreversível: a análise aparece, mas a ativação é pela Central por enquanto.</p>}
    {list.length>0&&<ul className="gp-campaign-rows">{list.map(r=>{const o=outcomes[r.itemId],ok=!r.blockReason&&!r.error&&!!r.refId;return <li key={r.itemId}>
     <input type="checkbox" aria-label={'Selecionar '+r.label} checked={selected.has(r.itemId)&&!o} disabled={!ok||!!o||running||!enabled||!activatable.has(c.type)} onChange={()=>setSelected(s=>{const n=new Set(s);if(!n.delete(r.itemId))n.add(r.itemId);return n})}/>
-    <span>{r.label}</span>
+    <span>{r.label}{r.current&&<span className="gp-note">Em promoção: {r.current.name}{r.current.status==='pending'?' (programada)':''}{fmt(r.current.finish)?` até ${fmt(r.current.finish)}`:''}</span>}</span>
     <span>{r.price!==null?brl(r.price):'—'}</span>
     <span>{r.analysis?.margin!=null?`margem ${pct(r.analysis.margin)}`:r.analysis?(r.analysis.status==='missing'?<span className="gp-note">Faltam dados: {r.analysis.missing.join(', ')}</span>:verdict[r.analysis.status]):r.reason?<span className="gp-note gp-danger">Sem margem: {r.reason}</span>:'—'}</span>
     <span className={o?'gp-verdict '+outcomeTone(o):ok?'gp-verdict gp-ok':'gp-note'}>{o?outcomeText(o):r.error??r.blockReason??'Apta'}</span>

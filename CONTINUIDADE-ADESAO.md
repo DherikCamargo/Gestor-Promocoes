@@ -70,3 +70,8 @@ Observação: as contagens da Central ("34 eleg." em Aumente sua competitividade
 
 ## Motivo quando não há margem — 25/09/2026
 Dherik viu "—" na margem em vários anúncios (relâmpago e outros tipos). Causa: o gestor não calcula a margem quando a oferta tem preço contraditório (fora do mínimo/máximo do próprio ML — ex.: MLB7000985086 a R$ 180,48, o mesmo padrão do incidente), não tem preço nem sugestão, ou o anúncio tem variações internas com preços diferentes. Nos cards, o aviso "ative pela Central" escondia esse motivo. Agora a coluna mostra "Sem margem: <motivo>" (ou "Faltam dados: …"), e a mensagem de preço contraditório ficou explícita. Testes 89/89.
+
+## Oferta relâmpago sem margem e promoção atual nos cards — 25/09/2026
+Comparação de Dherik no MLB3801049271: oferta relâmpago no gestor R$ 172,07 (margem 19,96%) × Central R$ 168,74 (R$ 239,90 − R$ 71,16), recebe R$ 123,37. Segundo caso em que o preço LIGHTNING da API (/seller-promotions/items) não confere com a Central (o primeiro foi o incidente: 180,48 × 164,12). offerTerms passa a recusar LIGHTNING com o motivo "o preço da oferta relâmpago informado pela API não confere com a Central"; a margem não é calculada. Ativação de LIGHTNING já era pela Central.
+/promocoes/analise devolve currentPromotion (oferta started/pending de outra campanha); nos cards cada anúncio mostra "Em promoção: <nome> até DD/MM". No mesmo print, a Central oferecia a continuação "Com redução de tarifas 25/set a 25/out" (R$ 172,71, reduz R$ 1,34).
+Pendente para ofertas relâmpago: verificar se /seller-promotions/candidates/{ref_id} (conferência relâmpago em /diagnostico) traz o preço da Central. Testes 90/90.

@@ -17,6 +17,9 @@ export function parseRules(v:unknown):MarginRules|null{
 export type OfferTerms={ok:true;price:number;priceSource:'offer'|'suggested';mlSubsidy:number|null;feeDiscount:number|null}|{ok:false;reason:string};
 // Preço e benefícios de uma oferta, sem presumir valores ausentes.
 export function offerTerms(o:Record<string,unknown>):OfferTerms{
+ // Oferta relâmpago: o preço da API não confere com a Central (incidente: 180,48 × 164,12; 25/09/2026,
+ // MLB3801049271: 172,07 × 168,74). Não calcular margem sobre um preço que não é o real.
+ if(o.type==='LIGHTNING')return {ok:false,reason:'o preço da oferta relâmpago informado pela API não confere com a Central. Confira o preço lá antes de participar.'};
  if(o.type==='SELLER_COUPON_CAMPAIGN')return {ok:false,reason:'Cupom do vendedor: o desconto depende do cupom, não há preço para analisar.'};
  const issues=promotionPriceIssues(o);
  // Preço fora do mínimo/máximo do próprio ML (padrão do incidente LIGHTNING 180,48 > 170,99): não calcula.
