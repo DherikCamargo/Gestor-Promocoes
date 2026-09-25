@@ -7,6 +7,7 @@ import type {SaleFee,ActiveOffer} from '@/lib/listing-fees';
 import {listingSearch} from '@/lib/listing-search';
 import {listingCost,defaultProducts,type ListingCost} from '@/lib/product-costs';
 import {OfferPanel,RulesPanel,FamilyActivation} from './offer-panel';
+import {PromotionsBoard} from './promotions-board';
 type Snapshot={run:string;rows:CatalogRow[];done:boolean};
 type Summary={itemId:string;title:string;listingType:string;familyId:string|null;currency:string;regularPrice:number|null;promotionPrice:number|null;currentPrice:number|null;variationPrices:boolean;freight:number|null;freeShipping:boolean|null;saleFee:SaleFee|null;promotion:ActiveOffer|null};
 type Result={data?:Summary;error?:string};
@@ -147,6 +148,8 @@ export default function SimpleCatalog(){
  const retry=useCallback((id:string)=>{requested.current.delete(id);setResults(s=>{const next={...s};delete next[id];return next})},[]);
  const groups=useMemo(()=>groupRows(snapshot?.rows??[]),[snapshot]);
  const costs=useMemo(()=>Object.fromEntries(groups.flatMap(g=>g.items).map(i=>[i.itemId,listingCost(i.rows,overrides)])),[groups,overrides]);
+ // Todos os anúncios importados, um por MLB (variações de família com o nome da opção).
+ const boardItems=useMemo(()=>groups.flatMap(g=>g.items.map(l=>({itemId:l.itemId,label:(g.familyId&&l.variation?l.title+' — '+l.variation:l.title)+' · '+l.itemId}))),[groups]);
  const familyCosts=useMemo(()=>Object.fromEntries(groups.filter(g=>g.familyId).map(g=>[g.key,listingCost(g.items.flatMap(i=>i.rows),overrides)])),[groups,overrides]);
  const search=useMemo(()=>filter.trim()?listingSearch(filter,snapshot?.rows??[]):null,[filter,snapshot]);
  const visible=useMemo(()=>{
@@ -177,6 +180,7 @@ export default function SimpleCatalog(){
  {message&&<p role="status">{message}</p>}
  {costNotice&&<p role="status" className="gp-danger">{costNotice}</p>}
  <RulesPanel onSaved={()=>setVersion(v=>v+1)}/>
+ {boardItems.length>0&&<details className="gp-rules"><summary>Painel de promoções</summary><PromotionsBoard items={boardItems}/></details>}
  {search?.message&&<p role="status">{search.message}</p>}
  {loading&&<p role="status">Carregando anúncios…</p>}
  {!loading&&!snapshot?.done&&snapshot&&<p className="small">Importação parcial. Atualize os anúncios para completar a lista.</p>}

@@ -32,3 +32,14 @@ Autorizado por Dherik ("autorizo ligar as adesões"); PARTICIPATION_ENABLED=true
 - Gestor mostrou "unverified" (aceito, mas não apareceu ativo): a conferência exigia ref_id igual ao offer_id devolvido pelo POST e fazia 3 leituras em ~4 s.
 
 Correção: verifyParticipation aceita a oferta da mesma campanha e tipo, ativa/programada, com o preço esperado; o offer_id só desempata quando há mais de uma. 5 leituras (~10 s). participation_log guarda offer_id e preço da resposta e o resumo da campanha na última leitura. Botão "Conferir de novo" para resultados não confirmados (anúncio e família). Testes 72/72 (caso real incluído).
+
+## Ativação por família validada — 25/09/2026
+Após o PR #15, Dherik ativou uma família pelo "Ativar nas N variações aptas" e confirmou: "ativação por família está validada".
+
+## Painel de promoções — 25/09/2026
+Pedido: lista única do que ativar (opção B) e mostrar anúncios sem promoção.
+- lib/promotion-board.ts: `classifyListing` por anúncio a partir da análise (mesmo `buildOfferReport` da tela e da adesão): `active` (oferta started/pending — fora do lote, para não trocar a promoção atual), `available` (sem promoção e com oferta candidata apta, maior margem primeiro) ou `none` (sem promoção; motivo: N ofertas sem aptidão ou nenhuma oferta do ML).
+- app/promotions-board.tsx: seção recolhível "Painel de promoções" na página principal. "Analisar todos os anúncios" consulta /promocoes/analise de todos os MLBs importados, duas por vez, com progresso e botão Parar. Mostra: contagens; "Aptas para ativar" (uma promoção por anúncio, a de maior margem pré-marcada, marcar/desmarcar todos, "Ativar selecionadas (N)" com confirmação, uma adesão por vez pela mesma rota revalidada, resultado por anúncio); "Sem promoção" (com oferta apta ou o motivo); "Já em promoção" recolhido.
+- Nada muda no servidor: a ativação em lote usa /promocoes/participar, que revalida cada anúncio.
+- Testes: 76/76 (4 novos em tests/promotion-board.test.mjs). Sem teste visual (Windows). Nenhuma adesão real nesta etapa de desenvolvimento.
+- Limite: com muitos anúncios a análise completa leva minutos (≈ 2 consultas simultâneas; cada uma faz várias chamadas ao ML).
